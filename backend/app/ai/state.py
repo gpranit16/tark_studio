@@ -1,0 +1,36 @@
+"""LangGraph state definitions for TARK Studio AI workflows."""
+
+from typing import TypedDict, List, Optional, Any
+
+
+class ChatState(TypedDict, total=False):
+    """Core state for chat workflows in LangGraph.
+    
+    Attributes:
+        messages: List of chat message dictionaries with 'role' and 'content'.
+        model: Identifier of the target model (e.g. 'openai/gpt-oss-120b').
+        temperature: Model sampling temperature between 0.0 and 2.0.
+        provider: Resolved provider name ('groq', 'gemini', or 'ollama').
+        response: Accumulated assistant completion text.
+        error: Error description if a node fails, else None.
+    """
+    messages: List[dict]
+    model: str
+    temperature: float
+    provider: str
+    response: str
+    error: Optional[str]
+    document_ids: Optional[List[str]]
+    candidate_chunks: Optional[List[Any]]
+    retrieved_chunks: Optional[List[dict]]
+    citations: Optional[List[dict]]
+    reranker_type: Optional[str]
+
+
+class TitleState(TypedDict, total=False):
+    """State definition for LangGraph title generation workflow."""
+    prompt: str
+    model: str
+    provider: str
+    title: str
+    error: Optional[str]

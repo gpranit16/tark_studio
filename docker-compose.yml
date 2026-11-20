@@ -1,0 +1,25 @@
+name: tark-studio
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: tark_pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-tark_studio}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - tark_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-tark_studio}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  tark_postgres_data:
+    name: tark_postgres_data

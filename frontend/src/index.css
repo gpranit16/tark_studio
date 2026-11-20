@@ -1,0 +1,166 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-main: #10130F;
+  --bg-sidebar: #171C17;
+  --bg-elevated: #20271F;
+  --border-color: #394336;
+  --text-primary: #F1EEE6;
+  --text-secondary: #B7BDAE;
+  --text-muted: #929B89;
+  --accent-sage: #A5B49A;
+  --accent-ember: #E59A64;
+  --hover-ember: #F0AB78;
+}
+
+/* Ensure smooth, natural text selection everywhere in content */
+::selection {
+  background-color: #E59A64;
+  color: #10130F;
+}
+
+pre ::selection,
+code ::selection {
+  background-color: #A5B49A;
+  color: #10130F;
+}
+
+/* Neo-Brutalist Chamfered Corner Geometries */
+.chamfer-6 {
+  clip-path: polygon(
+    6px 0%,
+    calc(100% - 6px) 0%,
+    100% 6px,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    6px 100%,
+    0% calc(100% - 6px),
+    0% 6px
+  );
+}
+
+.chamfer-10 {
+  clip-path: polygon(
+    10px 0%,
+    calc(100% - 10px) 0%,
+    100% 10px,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    10px 100%,
+    0% calc(100% - 10px),
+    0% 10px
+  );
+}
+
+.chamfer-14 {
+  clip-path: polygon(
+    14px 0%,
+    calc(100% - 14px) 0%,
+    100% 14px,
+    100% calc(100% - 14px),
+    calc(100% - 14px) 100%,
+    14px 100%,
+    0% calc(100% - 14px),
+    0% 14px
+  );
+}
+
+/* Custom dark scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a3328;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #394336;
+}
+
+/* EMBER SAGE Prism Syntax Highlighting Tokens */
+code[class*="language-"],
+pre[class*="language-"] {
+  color: #F1EEE6;
+  font-family: 'IBM Plex Mono', monospace;
+  text-align: left;
+  white-space: pre;
+  word-spacing: normal;
+  word-break: normal;
+  word-wrap: normal;
+  line-height: 1.6;
+  tab-size: 2;
+  hyphens: none;
+}
+
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: #929B89;
+  font-style: italic;
+}
+
+.token.punctuation {
+  color: #B7BDAE;
+}
+
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol,
+.token.deleted {
+  color: #E59A64;
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted {
+  color: #A5B49A;
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  color: #F0AB78;
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: #E59A64;
+  font-weight: 600;
+}
+
+.token.function,
+.token.class-name {
+  color: #F1EEE6;
+  font-weight: 600;
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+  color: #A5B49A;
+}
+
+.token.important,
+.token.bold {
+  font-weight: bold;
+}
+
+.token.italic {
+  font-style: italic;
+}
