@@ -1832,7 +1832,7 @@ export default function App() {
                               </span>
                             )}
                             <span className="text-[#929B89]">
-                              • {(doc.file_size_bytes / 1024 / 1024).toFixed(1)}MB
+                              • {doc.file_size_bytes < 1024 * 1024 ? `${(doc.file_size_bytes / 1024).toFixed(0)}KB` : `${(doc.file_size_bytes / 1024 / 1024).toFixed(1)}MB`}
                             </span>
                           </div>
                         </div>
@@ -2062,7 +2062,9 @@ export default function App() {
                                 <span>•</span>
                                 <span>{doc.chunk_count} chunks</span>
                                 <span>•</span>
-                                <span>{(doc.file_size_bytes / 1024 / 1024).toFixed(2)} MB</span>
+                                <span>
+                                  {doc.file_size_bytes < 1024 * 1024 ? `${(doc.file_size_bytes / 1024).toFixed(0)} KB` : `${(doc.file_size_bytes / 1024 / 1024).toFixed(2)} MB`}
+                                </span>
                               </div>
                             </div>
                           </div>

@@ -11,6 +11,7 @@ Architecture guarantees:
 """
 
 import os
+import time
 import asyncio
 import logging
 from abc import ABC, abstractmethod
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 EMBEDDING_DIM = 768
 DEFAULT_BATCH_SIZE = 32
-CLOUDFLARE_DEFAULT_BATCH_SIZE = 4
+CLOUDFLARE_DEFAULT_BATCH_SIZE = 16
 QUERY_CACHE_MAX_SIZE = 256
 
 
@@ -305,14 +306,21 @@ class CloudflareEmbeddings(BaseEmbeddingProvider):
         async def _fetch_single_batch(batch_idx: int, batch: List[str]) -> List[List[float]]:
             async with sem:
                 client = self._get_client()
+                t_b0 = time.perf_counter()
                 # Cloudflare Workers AI Embedding schema supports 'text' array or 'input' array
                 payload: Dict[str, Any] = {"text": batch}
                 res = await client.post(url, headers=headers, json=payload)
 
                 # Fallback to 'input' parameter if 'text' fails with 400
                 if res.status_code == 400:
+                    logger.warning(f"Batch {batch_idx} returned 400 on 'text' payload, retrying with 'input'")
                     payload = {"input": batch}
                     res = await client.post(url, headers=headers, json=payload)
+
+                b_dur = round(time.perf_counter() - t_b0, 2)
+                logger.info(
+                    f"[Cloudflare AI] Batch {batch_idx} ({len(batch)} items) completed in {b_dur}s with status {res.status_code}"
+                )
 
                 if res.status_code != 200:
                     raise RuntimeError(

@@ -23,8 +23,8 @@ async def ingest_document_file(
     file_path: str,
     filename: Optional[str] = None,
     document_id: Optional[uuid.UUID] = None,
-    chunk_size_tokens: int = 500,
-    overlap_tokens: int = 80,
+    chunk_size_tokens: int = 400,
+    overlap_tokens: int = 60,
 ) -> Document:
     """Ingest a local document file into PostgreSQL with embeddings and FTS indexing."""
     start_time = time.perf_counter()
@@ -33,22 +33,29 @@ async def ingest_document_file(
 
     # 1. Parse document
     logger.info(f"Parsing document {target_filename} (id: {doc_id})...")
+    t0 = time.perf_counter()
     parsed_doc = parse_document(file_path, filename=target_filename)
+    parse_sec = round(time.perf_counter() - t0, 2)
 
     # 2. Chunk document
+    t0 = time.perf_counter()
     chunker = TokenChunker(chunk_size_tokens=chunk_size_tokens, overlap_tokens=overlap_tokens)
     chunks_data = chunker.chunk_document(parsed_doc)
+    chunk_sec = round(time.perf_counter() - t0, 2)
     logger.info(f"Created {len(chunks_data)} token chunks across {parsed_doc.page_count} pages.")
 
     # 3. Generate 768d vector embeddings via active provider (Ollama in local, Cloudflare in prod)
     logger.info(f"Generating 768d vector embeddings using {embeddings_client.model_name}...")
+    t0 = time.perf_counter()
     chunk_texts = [c.content for c in chunks_data]
     embeddings = await embeddings_client.get_embeddings_batch(chunk_texts, is_query=False)
+    embed_sec = round(time.perf_counter() - t0, 2)
 
     if len(embeddings) != len(chunks_data):
         raise RuntimeError(f"Embedding count mismatch: expected {len(chunks_data)}, got {len(embeddings)}")
 
     # 4. Save to PostgreSQL
+    t0 = time.perf_counter()
     async with async_session_factory() as session:
         # Check if record was pre-created in 'processing' state
         stmt = select(Document).where(Document.id == doc_id)
@@ -59,6 +66,9 @@ async def ingest_document_file(
         meta = {
             **parsed_doc.metadata,
             "ingestion_duration_sec": duration_sec,
+            "parse_duration_sec": parse_sec,
+            "chunk_duration_sec": chunk_sec,
+            "embed_duration_sec": embed_sec,
             "chunk_size_tokens": chunk_size_tokens,
             "overlap_tokens": overlap_tokens,
             "warnings": parsed_doc.warnings[:20],
