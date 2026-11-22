@@ -56,6 +56,11 @@ def set_test_checkpointer(checkpointer: Optional[BaseCheckpointSaver]):
 
 def get_postgres_connection_string() -> str:
     """Resolve standard psycopg connection string for checkpointer."""
+    if settings.database_url:
+        url = settings.database_url
+        if url.startswith("postgresql+asyncpg://"):
+            url = url.replace("postgresql+asyncpg://", "postgresql://", 1)
+        return url
     return (
         f"postgresql://{settings.postgres_user}:{settings.postgres_password}@"
         f"{settings.postgres_host}:{settings.postgres_port}/{settings.postgres_db}"
