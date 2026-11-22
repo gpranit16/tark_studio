@@ -76,6 +76,30 @@ class OllamaEmbeddings:
 
         return all_embeddings
 
+    async def ensure_model_available(self) -> bool:
+        """Verify that the embedding model is available in Ollama, pulling it if absent."""
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                res = await client.get(f"{self.base_url}/api/tags")
+                if res.status_code == 200:
+                    models = [m.get("name", "") for m in res.json().get("models", [])]
+                    if any(self.model in name for name in models):
+                        logger.info(f"Ollama model '{self.model}' is verified available.")
+                        return True
+                    logger.info(f"Ollama model '{self.model}' not found in {models}. Pulling model...")
+                    pull_res = await client.post(
+                        f"{self.base_url}/api/pull",
+                        json={"name": self.model, "stream": False},
+                        timeout=300.0,
+                    )
+                    if pull_res.status_code == 200:
+                        logger.info(f"Ollama model '{self.model}' pulled successfully.")
+                        return True
+                    logger.warning(f"Ollama pull returned status {pull_res.status_code}: {pull_res.text}")
+        except Exception as exc:
+            logger.warning(f"Could not verify/pull Ollama model '{self.model}': {exc}")
+        return False
+
 
 # Default singleton instance
 embeddings_client = OllamaEmbeddings()

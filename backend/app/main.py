@@ -22,9 +22,57 @@ from app.api.documents import router as documents_router
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan context: initialize and cleanup resources."""
-    # Startup
+    # Startup: Warm up ONNX reranker ahead of time to eliminate user-perceived cold-start latency
+    try:
+        from app.rag.reranker import get_reranker
+        import logging
+        import time
+        log = logging.getLogger("app.startup")
+        t0 = time.perf_counter()
+        log.info("Warming up ONNX cross-encoder model during application startup...")
+        reranker = get_reranker("onnx")
+        # Run small dummy inference to prime CPU weights and memory buffers
+        await asyncio.to_thread(reranker.rerank, "warmup query", [{"content": "warmup candidate chunk"}], 1)
+        log.info(f"ONNX reranker warmed up successfully in {round(time.perf_counter() - t0, 3)}s.")
+    except Exception as exc:
+        import logging
+        logging.getLogger("app.startup").warning(f"ONNX reranker warmup skipped/deferred: {exc}")
+
+    # Startup: Warm up PostgreSQL checkpointer connection and schema
+    try:
+        from app.ai.graph import get_checkpointer, get_compiled_graph
+        import logging
+        log = logging.getLogger("app.startup")
+        log.info("Warming up PostgreSQL checkpointer connection...")
+        await get_checkpointer()
+        log.info("Warming up compiled StateGraph...")
+        await get_compiled_graph()
+        log.info("PostgreSQL checkpointer and StateGraph warmed up successfully.")
+    except Exception as exc:
+        import logging
+        logging.getLogger("app.startup").warning(f"Checkpointer warmup deferred: {exc}")
+
+    # Startup: Ensure Ollama nomic-embed-text is available
+    try:
+        from app.rag.embeddings import embeddings_client
+        import logging
+        log = logging.getLogger("app.startup")
+        log.info("Verifying Ollama embedding model availability...")
+        asyncio.create_task(embeddings_client.ensure_model_available())
+    except Exception as exc:
+        import logging
+        logging.getLogger("app.startup").warning(f"Ollama model check deferred: {exc}")
+
     yield
-    # Shutdown: dispose of database connection pool and checkpointer
+    # Shutdown: gracefully await pending background rolling summaries, then dispose of checkpointer & DB
+    try:
+        from app.ai.memory import background_summary_manager
+        import logging
+        await background_summary_manager.wait_all_pending(timeout=10.0)
+    except Exception as exc:
+        import logging
+        logging.getLogger("app.shutdown").warning(f"Error waiting for pending summaries during shutdown: {exc}")
+
     await close_checkpointer()
     await engine.dispose()
 
@@ -38,10 +86,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Configure CORS
+# Configure CORS for local development and production Cloudflare Pages
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.debug else ["http://localhost:5173"],
+    allow_origins=settings.allowed_cors_origins,
+    allow_origin_regex=r"^https:\/\/.*\.pages\.dev$" if not settings.debug else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

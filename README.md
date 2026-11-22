@@ -31,7 +31,6 @@ TARK Studio is built for developers and researchers who require:
 - **Retrieval:** Parallel Dense Vector Search + PostgreSQL Full-Text Search (FTS `ts_rank_cd`) with Reciprocal Rank Fusion (RRF)
 - **Rerankers:**
   - **ONNX (Production):** `Xenova/ms-marco-MiniLM-L-6-v2` (22 MB INT8 quantized cross-encoder via ONNX Runtime)
-  - **BGE (Local Benchmarking):** `BAAI/bge-reranker-v2-m3` via FlagEmbedding
   - **Baseline:** Strict RRF ranking pass-through
 - **LLM Inference:** Groq API (High-throughput streaming via Server-Sent Events / SSE)
 - **Testing:** Pytest with AnyIO / AsyncIO
@@ -100,7 +99,22 @@ Evaluated on the 241-page textbook `pythonlearn.pdf` (325 chunks):
 
 ---
 
-## 6. Getting Started
+## 6. Production Deployment (Free Tier)
+
+TARK Studio is engineered for zero-cost production deployment utilizing free-tier cloud infrastructure:
+
+- **Frontend:** [Cloudflare Pages](https://pages.cloudflare.com/) (Free global CDN, automated Vite build)
+- **Backend & Database:** [Oracle Cloud Always Free](https://www.oracle.com/cloud/free/) Ampere A1 ARM64 VM (2 OCPU, 12 GB RAM, 200 GB block storage)
+- **Dynamic DNS & SSL:** [DuckDNS](https://www.duckdns.org/) + [Caddy 2](https://caddyserver.com/) (Automatic Let's Encrypt / ZeroSSL TLS, zero-buffering SSE streaming)
+- **Deployment Manifests:** `docker-compose.prod.yml`, `backend/Dockerfile`, and `deploy/Caddyfile`
+
+Detailed step-by-step guides:
+- 📖 [Production Deployment Guide (Oracle + Cloudflare Pages)](docs/DEPLOYMENT_GUIDE.md)
+- 💾 [Data Migration, Backup & Restoration Guide](docs/DATA_MIGRATION_AND_BACKUP.md)
+
+---
+
+## 7. Getting Started (Local Development)
 
 ### Prerequisites
 - Python 3.12+
@@ -110,7 +124,7 @@ Evaluated on the 241-page textbook `pythonlearn.pdf` (325 chunks):
 
 ### 1. Database Setup (Docker)
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 *Starts PostgreSQL 16 with pgvector on port 5433.*
 
@@ -153,22 +167,34 @@ npm run dev
 
 ---
 
-## 7. Running Tests
+## 8. Running Tests
 
 ### Backend Unit & Integration Tests (Pytest)
 ```bash
 cd backend
-pytest -v
+pytest tests/ -v
 ```
 
-### Frontend Tests (Vitest)
+### Frontend Tests & Production Build (Vitest & Vite)
 ```bash
 cd frontend
 npm test -- --run
+npm run build
 ```
 
 ---
 
-## 8. License
+## 9. Architectural Reports & Documentation
+
+Comprehensive engineering reports and audits:
+- [API Contracts Specification](docs/API_CONTRACTS.md)
+- [System Architecture](docs/ARCHITECTURE.md)
+- [Database Design](docs/DATABASE_DESIGN.md)
+- [Product Requirements](docs/PRODUCT_REQUIREMENTS.md)
+- [Engineering Audits & Benchmark Reports](docs/reports/)
+
+---
+
+## 10. License
 
 MIT License. See [LICENSE](LICENSE) for details.

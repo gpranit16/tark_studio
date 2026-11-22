@@ -7,7 +7,7 @@ Preserves page coordinates, printed book labels, section headings, and figure re
 import re
 import logging
 from typing import List, Optional, Dict, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import tiktoken
 
 from app.rag.parser import ParsedDocument, ExtractedPage
@@ -58,6 +58,8 @@ class DocumentChunkData:
     token_count: int
     has_image: bool
     image_references: List[Dict[str, Any]]
+    links: List[Dict[str, Any]] = field(default_factory=list)
+    tables: List[Dict[str, Any]] = field(default_factory=list)
 
 
 class TokenChunker:
@@ -100,6 +102,8 @@ class TokenChunker:
                         token_count=total_tokens,
                         has_image=page.has_image,
                         image_references=page.image_references,
+                        links=getattr(page, "links", []),
+                        tables=getattr(page, "tables", []),
                     )
                 )
                 global_chunk_idx += 1
@@ -125,6 +129,8 @@ class TokenChunker:
                             token_count=len(slice_tokens),
                             has_image=page.has_image,
                             image_references=page.image_references if start == 0 else [],
+                            links=getattr(page, "links", []),
+                            tables=getattr(page, "tables", []),
                         )
                     )
                     global_chunk_idx += 1

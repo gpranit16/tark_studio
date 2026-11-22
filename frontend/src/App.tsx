@@ -69,12 +69,48 @@ export interface DocumentItem {
   created_at: string;
 }
 
+export interface MemoryStatus {
+  active: boolean;
+  summary_status: 'Available' | 'Updated' | 'Not required';
+  recent_tokens: number;
+  summary_turns: number;
+  recall_used: 'Used' | 'Not used';
+  prompt_tokens: number;
+}
+
+export interface RateLimitStatus {
+  status: 'waiting' | 'rate_limited' | 'ready';
+  reason: string;
+  wait_sec?: number;
+  retry_after_sec?: number;
+  remaining_tokens?: number;
+  limit_tokens?: number;
+}
+
+export interface BackendTimings {
+  retrieval_ms: number;
+  rerank_ms: number;
+  tok_ms: number;
+  inf_ms: number;
+  memory_ms?: number;
+  queue_wait_ms?: number;
+  prompt_tokens?: number;
+  provider_ttft_ms?: number;
+  llm_generation_ms: number;
+  llm_total_ms?: number;
+  backend_total_ms: number;
+  rate_limit?: Record<string, any>;
+}
+
 export interface RagStatus {
   retrieval: string;
-  reranker: 'OFF' | 'ONNX' | 'BGE' | string;
+  reranker: 'OFF' | 'ONNX' | string;
   candidates_count: number;
   reranked_count: number;
+  retrieval_latency_ms?: number;
   rerank_latency_ms: number;
+  tok_ms?: number;
+  inf_ms?: number;
 }
 
 export interface ChatMessage {
@@ -82,6 +118,10 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   latencyMs?: number;
+  ttftMs?: number;
+  backendTimings?: BackendTimings;
+  memoryStatus?: MemoryStatus;
+  rateLimitStatus?: RateLimitStatus;
   citations?: CitationItem[];
   ragStatus?: RagStatus;
 }
@@ -103,6 +143,8 @@ export interface ConversationItem {
   message_count: number;
   last_message_preview?: string | null;
 }
+
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
 
 const DEFAULT_MODELS: ModelOption[] = [
   { id: 'openai/gpt-oss-20b', name: 'GPT-OSS 20B (Groq Fast)', provider: 'groq' },
@@ -163,7 +205,7 @@ export default function App() {
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [isDocDrawerOpen, setIsDocDrawerOpen] = useState(false);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
-  const [selectedReranker, setSelectedReranker] = useState<'onnx' | 'baseline' | 'bge'>('onnx');
+  const [selectedReranker, setSelectedReranker] = useState<'onnx' | 'baseline'>('onnx');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Citation Evidence Drawer states
@@ -239,7 +281,7 @@ export default function App() {
   // Fetch ingested documents list
   const fetchDocuments = useCallback(async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/v1/documents');
+      const res = await fetch(`${API_BASE_URL}/api/v1/documents`);
       if (res.ok) {
         const data: DocumentItem[] = await res.json();
         setDocuments(data);
@@ -275,7 +317,7 @@ export default function App() {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const res = await fetch('http://localhost:8000/api/v1/documents/upload', {
+      const res = await fetch(`${API_BASE_URL}/api/v1/documents/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -298,7 +340,7 @@ export default function App() {
 
   const handleDeleteDocument = async (docId: string) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/documents/${docId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/documents/${docId}`, {
         method: 'DELETE',
       });
       if (res.ok) {
@@ -322,7 +364,7 @@ export default function App() {
       setIsLoadingConversations(true);
       try {
         const isArchived = tab === 'archived';
-        const url = new URL('http://localhost:8000/api/v1/conversations');
+        const url = new URL(`${API_BASE_URL}/api/v1/conversations`, window.location.origin);
         url.searchParams.set('is_archived', String(isArchived));
         if (query.trim()) {
           url.searchParams.set('q', query.trim());
@@ -355,7 +397,7 @@ export default function App() {
     setIsLoadingMessages(true);
     setGlobalError(null);
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/conversations/${id}`);
+      const res = await fetch(`${API_BASE_URL}/api/v1/conversations/${id}`);
       if (res.ok) {
         const data = await res.json();
         setActiveConversationId(data.id);
@@ -390,7 +432,7 @@ export default function App() {
 
   // Poll backend health & models list, restore saved conversation
   useEffect(() => {
-    fetch('http://localhost:8000/api/v1/health')
+    fetch(`${API_BASE_URL}/api/v1/health`)
       .then((res) => res.json())
       .then((data: BackendHealth) => {
         setHealth(data);
@@ -401,7 +443,7 @@ export default function App() {
         setLoading(false);
       });
 
-    fetch('http://localhost:8000/api/v1/models')
+    fetch(`${API_BASE_URL}/api/v1/models`)
       .then((res) => res.json())
       .then((data) => {
         if (data.models && data.models.length > 0) {
@@ -495,7 +537,7 @@ export default function App() {
     }
 
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/conversations/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/conversations/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: trimmed }),
@@ -516,7 +558,7 @@ export default function App() {
   const handleDeleteConversation = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/conversations/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/conversations/${id}`, {
         method: 'DELETE',
       });
       if (res.ok) {
@@ -533,7 +575,7 @@ export default function App() {
   const handleArchiveConversation = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/conversations/${id}/archive`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/conversations/${id}/archive`, {
         method: 'POST',
       });
       if (res.ok) {
@@ -550,7 +592,7 @@ export default function App() {
   const handleUnarchiveConversation = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/conversations/${id}/unarchive`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/conversations/${id}/unarchive`, {
         method: 'POST',
       });
       if (res.ok) {
@@ -564,7 +606,7 @@ export default function App() {
   const handleGenerateTitle = async (convId = activeConversationId) => {
     if (!convId) return;
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/conversations/${convId}/generate-title`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/conversations/${convId}/generate-title`, {
         method: 'POST',
       });
       if (res.ok) {
@@ -581,7 +623,6 @@ export default function App() {
     if (isGenerating || history.length === 0) return;
 
     const assistantMsgId = `assistant-${Date.now()}`;
-    const startTime = performance.now();
 
     const newAssistantMsg: ChatMessage = {
       id: assistantMsgId,
@@ -595,8 +636,12 @@ export default function App() {
 
     abortControllerRef.current = new AbortController();
 
+    let accumulatedText = '';
+    let updateTimeout: any = null;
+
     try {
-      const response = await fetch('http://localhost:8000/api/v1/chat/stream', {
+      const startTime = performance.now();
+      const response = await fetch(`${API_BASE_URL}/api/v1/chat/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -622,9 +667,9 @@ export default function App() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
-      let accumulatedText = '';
+      accumulatedText = '';
       let buffer = '';
-      let updateTimeout: any = null;
+      updateTimeout = null;
       let hasPendingUpdate = false;
 
       const flushUpdate = () => {
@@ -676,6 +721,14 @@ export default function App() {
               const parsed = JSON.parse(dataStr);
               if (parsed.delta) {
                 const isFirstToken = accumulatedText === '';
+                if (isFirstToken) {
+                  const measuredTtft = Math.round(performance.now() - startTime);
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantMsgId ? { ...m, ttftMs: measuredTtft } : m
+                    )
+                  );
+                }
                 accumulatedText += parsed.delta;
                 hasPendingUpdate = true;
                 if (isFirstToken) {
@@ -687,6 +740,24 @@ export default function App() {
                   }, 20);
                 }
               }
+            } catch {}
+          } else if (eventType === 'memory_status' && dataStr) {
+            try {
+              const parsed = JSON.parse(dataStr);
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId ? { ...m, memoryStatus: parsed } : m
+                )
+              );
+            } catch {}
+          } else if (eventType === 'rate_limit' && dataStr) {
+            try {
+              const parsed: RateLimitStatus = JSON.parse(dataStr);
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId ? { ...m, rateLimitStatus: parsed } : m
+                )
+              );
             } catch {}
           } else if (eventType === 'sources' && dataStr) {
             try {
@@ -708,10 +779,28 @@ export default function App() {
           } else if (eventType === 'done') {
             clearTimeout(updateTimeout);
             flushUpdate();
-            const latency = Math.round(performance.now() - startTime);
+            const totalWallClock = Math.round(performance.now() - startTime);
+            let parsedBackendTimings: BackendTimings | undefined;
+            let parsedMemoryStatus: MemoryStatus | undefined;
+            try {
+              const donePayload = JSON.parse(dataStr);
+              if (donePayload.timings) {
+                parsedBackendTimings = donePayload.timings;
+              }
+              if (donePayload.memory_status) {
+                parsedMemoryStatus = donePayload.memory_status;
+              }
+            } catch {}
             setMessages((prev) =>
               prev.map((m) =>
-                m.id === assistantMsgId ? { ...m, latencyMs: latency } : m
+                m.id === assistantMsgId
+                  ? {
+                      ...m,
+                      latencyMs: totalWallClock,
+                      backendTimings: parsedBackendTimings,
+                      memoryStatus: parsedMemoryStatus || m.memoryStatus,
+                    }
+                  : m
               )
             );
             fetchConversations();
@@ -741,14 +830,15 @@ export default function App() {
         }
       }
     } catch (err: any) {
-      if (err.name === 'AbortError') {
+      if (err.name === 'AbortError' || err.name === 'DOMException' || String(err.message).toLowerCase().includes('abort')) {
+        clearTimeout(updateTimeout);
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
               ? {
                   ...m,
-                  content: m.content
-                    ? `${m.content}\n\n*[Generation stopped]*`
+                  content: accumulatedText
+                    ? `${accumulatedText}\n\n*[Generation stopped]*`
                     : '*[Generation stopped]*',
                 }
               : m
@@ -810,7 +900,7 @@ export default function App() {
     // Truncate from this assistant message onwards in PostgreSQL
     if (activeConversationId) {
       try {
-        await fetch(`http://localhost:8000/api/v1/conversations/${activeConversationId}/truncate`, {
+        await fetch(`${API_BASE_URL}/api/v1/conversations/${activeConversationId}/truncate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ from_message_id: assistantMsg.id }),
@@ -831,7 +921,7 @@ export default function App() {
     if (activeConversationId) {
       const assistantMsg = messages[assistantMsgIdx];
       try {
-        await fetch(`http://localhost:8000/api/v1/conversations/${activeConversationId}/truncate`, {
+        await fetch(`${API_BASE_URL}/api/v1/conversations/${activeConversationId}/truncate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ from_message_id: assistantMsg.id }),
@@ -851,12 +941,12 @@ export default function App() {
 
     if (activeConversationId) {
       try {
-        await fetch(`http://localhost:8000/api/v1/conversations/${activeConversationId}/messages/${msgId}`, {
+        await fetch(`${API_BASE_URL}/api/v1/conversations/${activeConversationId}/messages/${msgId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content: trimmed }),
         });
-        await fetch(`http://localhost:8000/api/v1/conversations/${activeConversationId}/truncate`, {
+        await fetch(`${API_BASE_URL}/api/v1/conversations/${activeConversationId}/truncate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ after_message_id: msgId }),
@@ -1357,7 +1447,11 @@ export default function App() {
                     </div>
 
                     {/* Message Bubble Container */}
-                    <div className="flex-1 max-w-[85%] sm:max-w-[78%]">
+                    <div
+                      data-role={msg.role}
+                      data-testid={`message-${msg.role}`}
+                      className="flex-1 max-w-[85%] sm:max-w-[78%]"
+                    >
                       <div
                         className={`p-4 sm:p-5 rounded-lg border text-sm leading-relaxed ${
                           isUser
@@ -1375,20 +1469,34 @@ export default function App() {
                               }
                             />
                           ) : (
-                            /* Typing indicator pulse */
-                            <div className="flex items-center gap-1.5 py-1 text-[#A5B49A] font-mono text-xs">
-                              <span className="w-1.5 h-1.5 rounded-full bg-ember-copper animate-bounce" />
-                              <span
-                                className="w-1.5 h-1.5 rounded-full bg-ember-copper animate-bounce"
-                                style={{ animationDelay: '0.15s' }}
-                              />
-                              <span
-                                className="w-1.5 h-1.5 rounded-full bg-ember-copper animate-bounce"
-                                style={{ animationDelay: '0.3s' }}
-                              />
-                              <span className="ml-2 text-[#929B89]">
-                                Orchestrating via LangGraph...
-                              </span>
+                            /* Typing indicator pulse & rate-limit status */
+                            <div className="flex flex-col gap-2">
+                              {msg.rateLimitStatus && msg.rateLimitStatus.status !== 'ready' && (
+                                <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-[#20271F] border border-[#E59A64]/40 text-xs font-mono text-[#E59A64] animate-pulse">
+                                  <Zap size={13} className="text-[#E59A64]" />
+                                  <span>
+                                    {msg.rateLimitStatus.status === 'rate_limited'
+                                      ? `Rate limit reached (TPM bucket refilling). Retrying in ${msg.rateLimitStatus.wait_sec || msg.rateLimitStatus.retry_after_sec}s...`
+                                      : `TPM rate limit pacing: waiting ${msg.rateLimitStatus.wait_sec}s for token bucket refill...`}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1.5 py-1 text-[#A5B49A] font-mono text-xs">
+                                <span className="w-1.5 h-1.5 rounded-full bg-ember-copper animate-bounce" />
+                                <span
+                                  className="w-1.5 h-1.5 rounded-full bg-ember-copper animate-bounce"
+                                  style={{ animationDelay: '0.15s' }}
+                                />
+                                <span
+                                  className="w-1.5 h-1.5 rounded-full bg-ember-copper animate-bounce"
+                                  style={{ animationDelay: '0.3s' }}
+                                />
+                                <span className="ml-2 text-[#929B89]">
+                                  {msg.rateLimitStatus && msg.rateLimitStatus.status !== 'ready'
+                                    ? 'Awaiting Groq token bucket capacity...'
+                                    : 'Orchestrating via LangGraph...'}
+                                </span>
+                              </div>
                             </div>
                           )
                         ) : editingMessageId === msg.id ? (
@@ -1435,22 +1543,137 @@ export default function App() {
                           </div>
                         )}
 
-                        {/* Grounded RAG Runtime Status Pill */}
-                        {isAssistant && msg.ragStatus && (
-                          <div className="mt-3 pt-2.5 border-t border-[#394336]/60 flex items-center gap-2 flex-wrap">
-                            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-[#10130F] border border-[#394336] text-[10px] font-mono shadow-xs">
-                              <span className="text-[#929B89]">Retrieval: <span className="text-[#A5B49A] font-semibold">{msg.ragStatus.retrieval}</span></span>
-                              <span className="text-[#394336]">•</span>
-                              <span className="text-[#929B89]">Reranker: <span className={msg.ragStatus.reranker === 'OFF' ? 'text-[#929B89]' : 'text-ember-copper font-semibold'}>{msg.ragStatus.reranker}</span></span>
-                              <span className="text-[#394336]">•</span>
-                              <span className="text-[#929B89]">Candidates: <span className="text-[#F1EEE6] font-medium">{msg.ragStatus.candidates_count} → {msg.ragStatus.reranked_count}</span></span>
-                              {msg.ragStatus.reranker !== 'OFF' && (
-                                <>
+                        {/* Performance & Response Lifecycle Telemetry */}
+                        {isAssistant && (msg.latencyMs || msg.ttftMs || msg.ragStatus || msg.backendTimings) && (
+                          <div className="mt-3 pt-2.5 border-t border-[#394336]/60 flex flex-col gap-1.5">
+                            {/* Tier 1: Frontend User Experience (Actual Client Wall-Clock Time) */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-[#10130F] border border-[#394336] text-[10px] font-mono shadow-xs">
+                                <span className="text-[#929B89] flex items-center gap-1">
+                                  <Zap size={11} className="text-ember-copper" />
+                                  <span>Client E2E:</span>
+                                </span>
+                                <span className="text-[#E59A64] font-semibold">
+                                  Total: {msg.latencyMs ? `${(msg.latencyMs / 1000).toFixed(2)}s` : 'streaming...'}
+                                </span>
+                                <span className="text-[#394336]">•</span>
+                                <span className="text-[#929B89]">
+                                  TTFT: <span className="text-[#A5B49A] font-medium">{msg.ttftMs ? `${msg.ttftMs}ms` : 'waiting...'}</span>
+                                </span>
+                                {msg.latencyMs && msg.backendTimings && (
+                                  <>
+                                    <span className="text-[#394336]">•</span>
+                                    <span className="text-[#929B89]">
+                                      Network/UI: <span className="text-[#F1EEE6] font-medium">
+                                        {Math.max(0, msg.latencyMs - msg.backendTimings.backend_total_ms).toFixed(0)}ms
+                                      </span>
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+
+                              {/* RAG Candidate Pill (if RAG is active) */}
+                              {msg.ragStatus && (
+                                <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-[#10130F] border border-[#394336] text-[10px] font-mono shadow-xs">
+                                  <span className="text-[#929B89]">Retrieval: <span className="text-[#A5B49A] font-semibold">{msg.ragStatus.retrieval}</span></span>
                                   <span className="text-[#394336]">•</span>
-                                  <span className="text-[#929B89]">Rerank: <span className="text-[#A5B49A] font-medium">{msg.ragStatus.rerank_latency_ms}ms</span></span>
-                                </>
+                                  <span className="text-[#929B89]">Reranker: <span className={msg.ragStatus.reranker === 'OFF' ? 'text-[#929B89]' : 'text-ember-copper font-semibold'}>{msg.ragStatus.reranker}</span></span>
+                                  <span className="text-[#394336]">•</span>
+                                  <span className="text-[#929B89]">Candidates: <span className="text-[#F1EEE6] font-medium">{msg.ragStatus.candidates_count} → {msg.ragStatus.reranked_count}</span></span>
+                                </div>
                               )}
                             </div>
+
+                            {/* Tier 2: Backend Pipeline Processing Breakdown */}
+                            {msg.backendTimings && (
+                              <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-[#171C17] border border-[#394336]/80 text-[10px] font-mono text-[#929B89] shadow-xs flex-wrap">
+                                <span className="text-[#B7BDAE] font-medium">Backend: <span className="text-[#F1EEE6] font-semibold">{(msg.backendTimings.backend_total_ms / 1000).toFixed(2)}s</span></span>
+                                <span className="text-[#394336]">[</span>
+                                <span>Retrieve: <span className="text-[#A5B49A]">{msg.backendTimings.retrieval_ms}ms</span></span>
+                                <span className="text-[#394336]">•</span>
+                                <span>Rerank: <span className="text-[#E59A64]">{msg.backendTimings.rerank_ms}ms</span></span>
+                                {msg.backendTimings.queue_wait_ms !== undefined && msg.backendTimings.queue_wait_ms > 0 && (
+                                  <>
+                                    <span className="text-[#394336]">•</span>
+                                    <span>Queue: <span className="text-[#E59A64]">{msg.backendTimings.queue_wait_ms >= 1000 ? `${(msg.backendTimings.queue_wait_ms / 1000).toFixed(1)}s` : `${msg.backendTimings.queue_wait_ms}ms`}</span></span>
+                                  </>
+                                )}
+                                {msg.backendTimings.memory_ms !== undefined && msg.backendTimings.memory_ms > 0 && (
+                                  <>
+                                    <span className="text-[#394336]">•</span>
+                                    <span>Mem: <span className="text-[#A5B49A]">{msg.backendTimings.memory_ms}ms</span></span>
+                                  </>
+                                )}
+                                {msg.backendTimings.provider_ttft_ms !== undefined && (
+                                  <>
+                                    <span className="text-[#394336]">•</span>
+                                    <span>LLM TTFT: <span className="text-[#A5B49A]">{msg.backendTimings.provider_ttft_ms}ms</span></span>
+                                  </>
+                                )}
+                                <span className="text-[#394336]">•</span>
+                                <span>LLM Gen: <span className="text-[#A5B49A]">{(msg.backendTimings.llm_generation_ms / 1000).toFixed(2)}s</span></span>
+                                {msg.backendTimings.prompt_tokens !== undefined && (
+                                  <>
+                                    <span className="text-[#394336]">•</span>
+                                    <span>Prompt: <span className="text-ember-copper font-medium">{msg.backendTimings.prompt_tokens}t</span></span>
+                                  </>
+                                )}
+                                <span className="text-[#394336]">]</span>
+                              </div>
+                            )}
+
+                            {/* Tier 3: Conversation Memory Status & Token Budgeting */}
+                            {msg.memoryStatus && (
+                              <div
+                                data-testid="memory-status-badge"
+                                className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-[#10130F] border border-[#394336] text-[10px] font-mono shadow-xs flex-wrap"
+                              >
+                                <span className="text-[#929B89] flex items-center gap-1">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${msg.memoryStatus.active ? 'bg-[#A5B49A]' : 'bg-[#929B89]'}`} />
+                                  <span>Memory:</span>
+                                  <span className={msg.memoryStatus.active ? 'text-[#A5B49A] font-semibold' : 'text-[#929B89]'}>
+                                    {msg.memoryStatus.active ? 'Active' : 'Inactive'}
+                                  </span>
+                                </span>
+                                <span className="text-[#394336]">•</span>
+                                <span className="text-[#929B89]">
+                                  Rolling summary:{' '}
+                                  <span
+                                    className={
+                                      msg.memoryStatus.summary_status === 'Updated'
+                                        ? 'text-[#E59A64] font-semibold'
+                                        : msg.memoryStatus.summary_status === 'Available'
+                                        ? 'text-[#A5B49A] font-medium'
+                                        : 'text-[#929B89]'
+                                    }
+                                  >
+                                    {msg.memoryStatus.summary_status}
+                                  </span>
+                                </span>
+                                <span className="text-[#394336]">•</span>
+                                <span className="text-[#929B89]">
+                                  Recent context tokens:{' '}
+                                  <span className="text-[#A5B49A] font-medium">{msg.memoryStatus.recent_tokens}</span>
+                                </span>
+                                <span className="text-[#394336]">•</span>
+                                <span className="text-[#929B89]">
+                                  Summary turns:{' '}
+                                  <span className="text-[#F1EEE6] font-medium">{msg.memoryStatus.summary_turns}</span>
+                                </span>
+                                <span className="text-[#394336]">•</span>
+                                <span className="text-[#929B89]">
+                                  Historical recall:{' '}
+                                  <span className={msg.memoryStatus.recall_used === 'Used' ? 'text-[#E59A64] font-semibold' : 'text-[#929B89]'}>
+                                    {msg.memoryStatus.recall_used}
+                                  </span>
+                                </span>
+                                <span className="text-[#394336]">•</span>
+                                <span className="text-[#929B89]">
+                                  Prompt tokens:{' '}
+                                  <span className="text-ember-copper font-medium">{msg.memoryStatus.prompt_tokens}</span>
+                                </span>
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -1631,7 +1854,7 @@ export default function App() {
                   {/* Reranker Mode Selector */}
                   <div className="ml-auto flex items-center gap-1.5 font-mono text-[10px]">
                     <span className="text-[#929B89]">Reranker:</span>
-                    {(['onnx', 'baseline', 'bge'] as const).map((r) => (
+                    {(['onnx', 'baseline'] as const).map((r) => (
                       <button
                         key={r}
                         type="button"
@@ -1644,9 +1867,7 @@ export default function App() {
                         title={
                           r === 'onnx'
                             ? 'ONNX Cross-Encoder (Quantized INT8 - Render Safe)'
-                            : r === 'baseline'
-                            ? 'Baseline (OFF - Base Dense + FTS + RRF)'
-                            : 'BGE-reranker-v2-m3 (FlagEmbedding Local)'
+                            : 'Baseline (OFF - Base Dense + FTS + RRF)'
                         }
                       >
                         {r === 'baseline' ? 'OFF' : r.toUpperCase()}

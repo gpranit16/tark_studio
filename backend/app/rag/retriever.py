@@ -42,6 +42,8 @@ class RetrievedChunk:
     dense_score: Optional[float] = None
     sparse_score: Optional[float] = None
     rrf_score: float = 0.0
+    rerank_score: Optional[float] = None
+    rerank_rank: Optional[int] = None
 
     @property
     def citation_label(self) -> str:
@@ -56,6 +58,9 @@ class HybridRetriever:
 
     def __init__(self, rrf_k: int = RRF_K):
         self.rrf_k = rrf_k
+        self.last_dense_count: int = 0
+        self.last_sparse_count: int = 0
+        self.last_fused_count: int = 0
 
     async def _vector_search(
         self,
@@ -95,10 +100,37 @@ class HybridRetriever:
         document_ids: Optional[List[uuid.UUID]] = None,
         top_k: int = 30,
     ) -> List[Dict[str, Any]]:
-        """Run sparse lexical search using PostgreSQL Full-Text Search ts_rank_cd."""
+        """Run sparse lexical search using PostgreSQL Full-Text Search ts_rank_cd.
+
+        Strategy:
+        - Short entity/name queries (≤4 meaningful tokens): websearch_to_tsquery.
+          Websearch syntax parses phrase quotes ("exact match"), explicit OR (a or b),
+          and negative filters (-term), while sanitizing punctuation.
+        - Long/complex queries: plainto_tsquery (strict conjunctive AND match,
+          preventing query syntax errors on unformatted conversational questions).
+        Note on PostgreSQL semantics: websearch_to_tsquery joins unquoted words with
+        conjunction (&), not implicit disjunction (|). Disjunction only occurs when
+        explicitly specified by the user with the 'or' operator.
+        """
         clean_query = query_text.strip()
         if not clean_query:
             return []
+
+        # Determine which tsquery function to use based on query length.
+        # Stop words ("of", "the", "a", "is", "are", "in") are stripped by PostgreSQL's
+        # English dictionary so we count meaningful tokens only.
+        _STOP_WORDS = {"of", "the", "a", "an", "is", "are", "in", "on", "at", "to",
+                       "and", "or", "for", "with", "by", "from", "it", "this", "that",
+                       "was", "were", "be", "been", "being", "have", "has", "had",
+                       "do", "does", "did", "can", "could", "will", "would", "shall",
+                       "should", "may", "might", "must", "not", "no"}
+        meaningful_tokens = [t for t in clean_query.lower().split() if t not in _STOP_WORDS]
+        # Use websearch_to_tsquery for short entity/fact queries (≤4 meaningful tokens)
+        # to support user phrases ("..."), explicit OR, and robust token handling.
+        # Use plainto_tsquery for longer/complex conversational questions.
+        use_websearch = len(meaningful_tokens) <= 4
+
+        tsquery_fn = "websearch_to_tsquery" if use_websearch else "plainto_tsquery"
 
         async with async_session_factory() as session:
             if document_ids:
@@ -112,10 +144,10 @@ class HybridRetriever:
                 SELECT
                     c.id, c.document_id, d.filename, c.viewer_page, c.book_page,
                     c.heading, c.content, c.token_count, c.has_image, c.image_references,
-                    ts_rank_cd(to_tsvector('english', c.content), plainto_tsquery('english', :query_text)) AS fts_score
+                    ts_rank_cd(to_tsvector('english', c.content), {tsquery_fn}('english', :query_text)) AS fts_score
                 FROM document_chunks c
                 JOIN documents d ON c.document_id = d.id
-                WHERE to_tsvector('english', c.content) @@ plainto_tsquery('english', :query_text)
+                WHERE to_tsvector('english', c.content) @@ {tsquery_fn}('english', :query_text)
                   {doc_filter}
                 ORDER BY fts_score DESC
                 LIMIT :top_k;
@@ -123,6 +155,10 @@ class HybridRetriever:
             try:
                 result = await session.execute(text(sql), params)
                 rows = result.mappings().all()
+                logger.debug(
+                    f"FTS ({tsquery_fn}) returned {len(rows)} rows for query '{clean_query}' "
+                    f"({len(meaningful_tokens)} meaningful tokens)"
+                )
                 return [dict(r) for r in rows]
             except Exception as e:
                 logger.warning(f"PostgreSQL FTS query fell back for query '{clean_query}': {e}")
@@ -134,18 +170,40 @@ class HybridRetriever:
         document_ids: Optional[List[uuid.UUID]] = None,
         top_k: int = 5,
         max_context_tokens: int = 3500,
+        resolved_query: Optional[str] = None,
     ) -> List[RetrievedChunk]:
-        """Execute parallel dense + sparse search and fuse results using Reciprocal Rank Fusion."""
+        """Execute parallel dense + sparse search and fuse results using Reciprocal Rank Fusion.
+        
+        Supports conversation-aware resolved_query and compact document candidate expansion.
+        """
         start_time = time.perf_counter()
 
+        search_query = (resolved_query or query).strip()
+
         # 1. Generate query embedding
-        query_vector = await embeddings_client.get_embedding(query)
+        query_vector = await embeddings_client.get_embedding(search_query)
 
         # 2. Run vector search and full-text search in parallel
-        dense_results, sparse_results = await asyncio.gather(
-            self._vector_search(query_vector=query_vector, document_ids=document_ids, top_k=40),
-            self._sparse_fts_search(query_text=query, document_ids=document_ids, top_k=40),
-        )
+        fts_coros = [self._sparse_fts_search(query_text=search_query, document_ids=document_ids, top_k=40)]
+        if resolved_query and resolved_query.strip() != query.strip():
+            fts_coros.append(self._sparse_fts_search(query_text=query, document_ids=document_ids, top_k=20))
+
+        dense_coro = self._vector_search(query_vector=query_vector, document_ids=document_ids, top_k=40)
+
+        all_results = await asyncio.gather(dense_coro, *fts_coros)
+        dense_results = all_results[0]
+        sparse_results = all_results[1]
+        if len(all_results) > 2:
+            seen_ids = set()
+            combined_sparse = []
+            for r in sparse_results + all_results[2]:
+                if r["id"] not in seen_ids:
+                    seen_ids.add(r["id"])
+                    combined_sparse.append(r)
+            sparse_results = combined_sparse
+
+        self.last_dense_count = len(dense_results)
+        self.last_sparse_count = len(sparse_results)
 
         # 3. Reciprocal Rank Fusion calculation
         chunk_map: Dict[uuid.UUID, Dict[str, Any]] = {}
@@ -184,8 +242,40 @@ class HybridRetriever:
                 chunk_map[c_id]["sparse_score"] = float(row.get("fts_score", 0.0))
                 chunk_map[c_id]["rrf"] += 1.0 / (self.rrf_k + rank_idx)
 
+        # Compact document candidate expansion: for targeted small documents (<= 10 chunks),
+        # ensure all chunks are present in the candidate pool so no section is accidentally missed.
+        if document_ids:
+            try:
+                async with async_session_factory() as session:
+                    all_chunks_sql = """
+                        SELECT
+                            c.id, c.document_id, d.filename, c.viewer_page, c.book_page,
+                            c.heading, c.content, c.token_count, c.has_image, c.image_references
+                        FROM document_chunks c
+                        JOIN documents d ON c.document_id = d.id
+                        WHERE c.document_id = ANY(:doc_ids)
+                        ORDER BY c.viewer_page, c.chunk_index
+                        LIMIT 12;
+                    """
+                    doc_rows = (await session.execute(text(all_chunks_sql), {"doc_ids": [str(d) for d in document_ids]})).mappings().all()
+                    if 0 < len(doc_rows) <= 10:
+                        for r in doc_rows:
+                            cid = r["id"]
+                            if cid not in chunk_map:
+                                chunk_map[cid] = {
+                                    "data": dict(r),
+                                    "dense_rank": None,
+                                    "dense_score": 0.35,
+                                    "sparse_rank": None,
+                                    "sparse_score": None,
+                                    "rrf": 0.005,
+                                }
+            except Exception as exc:
+                logger.warning(f"Compact document candidate expansion skipped: {exc}")
+
         # Sort all chunks by fused RRF score descending
         fused_items = sorted(chunk_map.values(), key=lambda x: x["rrf"], reverse=True)
+        self.last_fused_count = len(fused_items)
 
         # 4. Deduplicate and pack within token limit
         retrieved_chunks: List[RetrievedChunk] = []

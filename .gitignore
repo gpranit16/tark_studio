@@ -48,6 +48,25 @@ pnpm-debug.log*
 backend/uploads/*
 !backend/uploads/.gitkeep
 *.log
+*.dump
+*.sql
+*.tar.gz
+*.backup
+backend/models_cache/
+
+# Screenshots & Disposable Result Files
+*.png
+*.jpg
+*.jpeg
+!frontend/public/*.jpg
+!frontend/public/*.png
+backend/eval/*_results.json
+backend/eval/results_baseline_*.json
+backend/eval/results_onnx_*.json
+backend/eval/local_10_question_validation.json
+backend/eval/memory_validation_results.json
+backend/eval/results_corrected_comparison.json
+backend/scripts/*_results.json
 
 # IDE / OS
 .vscode/

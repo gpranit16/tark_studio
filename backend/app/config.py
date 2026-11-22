@@ -36,12 +36,29 @@ class Settings(BaseSettings):
     groq_api_key: Optional[str] = Field(default=None, alias="GROQ_API_KEY")
     gemini_api_key: Optional[str] = Field(default=None, alias="GEMINI_API_KEY")
 
-    # Reranker settings (baseline, bge, onnx)
+    # Reranker settings (baseline, onnx)
     reranker_type: str = Field(default="baseline", alias="RERANKER_TYPE")
-    reranker_model_bge: str = Field(default="BAAI/bge-reranker-v2-m3", alias="RERANKER_MODEL_BGE")
     reranker_model_onnx: str = Field(default="Xenova/ms-marco-MiniLM-L-6-v2", alias="RERANKER_MODEL_ONNX")
     reranker_top_k: int = Field(default=5, alias="RERANKER_TOP_K")
     reranker_candidate_k: int = Field(default=20, alias="RERANKER_CANDIDATE_K")
+
+    # Conversation Memory settings (Rolling summary + Token-budget buffer)
+    memory_token_budget: int = Field(default=2048, alias="MEMORY_TOKEN_BUDGET")
+    memory_summary_threshold_tokens: int = Field(default=1024, alias="MEMORY_SUMMARY_THRESHOLD_TOKENS")
+    memory_summary_min_messages: int = Field(default=4, alias="MEMORY_SUMMARY_MIN_MESSAGES")
+    memory_summary_max_tokens: int = Field(default=250, alias="MEMORY_SUMMARY_MAX_TOKENS")
+
+    # Security & CORS settings
+    cors_origins: str = Field(default="http://localhost:5173,http://localhost:3000", alias="CORS_ORIGINS")
+
+    @property
+    def allowed_cors_origins(self) -> list[str]:
+        """Parse comma-separated CORS origins or allow all in debug mode."""
+        if self.debug:
+            return ["*"]
+        if not self.cors_origins:
+            return ["http://localhost:5173", "http://localhost:3000"]
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @property
     def async_database_url(self) -> str:

@@ -3,7 +3,6 @@
 Runs the exact same 40 benchmark questions against pythonlearn.pdf across:
 1. Baseline (dense + FTS + RRF top-k, no reranker)
 2. ONNX (Xenova/ms-marco-MiniLM-L-6-v2, 22MB INT8 quantized cross-encoder)
-3. BGE (BAAI/bge-reranker-v2-m3 via FlagEmbedding)
 
 Measures:
 - HitRate@5 and HitRate@20
@@ -44,7 +43,7 @@ logger = logging.getLogger("eval_reranker")
 
 from app.database import async_session_factory, Document, DocumentChunk
 from app.rag.retriever import hybrid_retriever
-from app.rag.reranker import get_reranker, BaselineReranker, BGEReranker, ONNXReranker
+from app.rag.reranker import get_reranker, BaselineReranker, ONNXReranker
 from app.ai.providers import get_model_stream
 from eval.benchmark_dataset import BENCHMARK_QUESTIONS
 
@@ -289,7 +288,7 @@ async def evaluate_reranker(
         "reranker_name": (
             "Baseline (None)"
             if mode == "baseline"
-            else ("BAAI/bge-reranker-v2-m3" if mode == "bge" else "Xenova/ms-marco-MiniLM-L-6-v2 (INT8 ONNX)")
+            else "Xenova/ms-marco-MiniLM-L-6-v2 (INT8 ONNX)"
         ),
         "total_queries": len(BENCHMARK_QUESTIONS),
         "embedding_model": "nomic-embed-text (768d)",
@@ -373,7 +372,7 @@ async def run_specialized_tests(doc_id: Any):
         },
     ]
 
-    for mode in ["baseline", "onnx", "bge"]:
+    for mode in ["baseline", "onnx"]:
         print(f"\n--- Testing Specialized Cases for Mode: {mode.upper()} ---")
         for c in cases:
             session_id = f"test_{mode}_{c['name'].replace(' ', '_')}"
@@ -401,8 +400,8 @@ async def run_specialized_tests(doc_id: Any):
             print(f"  Citations Count: {len(citations)}")
             print(f"  First 120 chars: {full_resp[:120].strip()}...")
             if c["verify_off_topic"]:
-                # In reranker modes, off-topic queries should yield 0 citations and honest refusal
-                if mode in ("bge", "onnx"):
+                # In reranker mode, off-topic queries should yield 0 citations and honest refusal
+                if mode == "onnx":
                     assert len(citations) == 0, f"Expected 0 citations for off-topic query in {mode}, got {len(citations)}"
                     assert "do not contain sufficient information" in full_resp.lower() or "not contain" in full_resp.lower(), "Expected honest refusal message"
                     print("  [PASS] Clean honest refusal with zero citations verified!")
@@ -425,18 +424,18 @@ async def main():
 
     print(f"Loaded target document: {doc.filename} (ID: {doc_id}) with {len(all_doc_chunks)} chunks.")
 
-    # 2. Run all three evaluations sequentially
+    # 2. Run both evaluations sequentially
     summaries = {}
-    for mode in ["baseline", "onnx", "bge"]:
+    for mode in ["baseline", "onnx"]:
         summaries[mode] = await evaluate_reranker(mode, doc_id, all_doc_chunks)
 
     # 3. Print Cross-Comparison Table
-    print("\n" + "=" * 95)
-    print("HEAD-TO-HEAD BENCHMARK COMPARISON: BASELINE vs ONNX vs BGE")
-    print("=" * 95)
-    header = f"{'Metric':<25} | {'Baseline':<12} | {'ONNX (MiniLM)':<15} | {'BGE (v2-m3)':<15} | {'Delta (BGE - Base)':<18}"
+    print("\n" + "=" * 90)
+    print("HEAD-TO-HEAD BENCHMARK COMPARISON: BASELINE vs ONNX (MiniLM-L-6-v2)")
+    print("=" * 90)
+    header = f"{'Metric':<25} | {'Baseline':<12} | {'ONNX (MiniLM)':<15} | {'Delta (ONNX - Base)':<18}"
     print(header)
-    print("-" * 95)
+    print("-" * 90)
 
     metric_keys = [
         ("HitRate@5", "hit_rate_at_5", True),
@@ -451,41 +450,37 @@ async def main():
     for label, key, is_pct in metric_keys:
         v_base = summaries["baseline"]["metrics"][key]
         v_onnx = summaries["onnx"]["metrics"][key]
-        v_bge = summaries["bge"]["metrics"][key]
-        delta_bge = v_bge - v_base
+        delta_onnx = v_onnx - v_base
 
         if is_pct:
             s_base = f"{v_base * 100:.2f}%"
             s_onnx = f"{v_onnx * 100:.2f}%"
-            s_bge = f"{v_bge * 100:.2f}%"
-            s_delta = f"{delta_bge * 100:+.2f}% pts"
+            s_delta = f"{delta_onnx * 100:+.2f}% pts"
         else:
             s_base = f"{v_base:.4f}"
             s_onnx = f"{v_onnx:.4f}"
-            s_bge = f"{v_bge:.4f}"
-            s_delta = f"{delta_bge:+.4f}"
+            s_delta = f"{delta_onnx:+.4f}"
 
-        print(f"{label:<25} | {s_base:<12} | {s_onnx:<15} | {s_bge:<15} | {s_delta:<18}")
+        print(f"{label:<25} | {s_base:<12} | {s_onnx:<15} | {s_delta:<18}")
 
-    print("-" * 95)
+    print("-" * 90)
     print("LATENCY & MEMORY PROFILE:")
-    print("-" * 95)
-    print(f"{'Candidate Retrieval (Mean)':<25} | {summaries['baseline']['latency_profile']['candidate_retrieval_mean_ms']:<8.1f} ms  | {summaries['onnx']['latency_profile']['candidate_retrieval_mean_ms']:<11.1f} ms  | {summaries['bge']['latency_profile']['candidate_retrieval_mean_ms']:<11.1f} ms")
-    print(f"{'Rerank Latency (Mean)':<25} | {'0.0':<8} ms  | {summaries['onnx']['latency_profile']['reranking_mean_ms']:<11.1f} ms  | {summaries['bge']['latency_profile']['reranking_mean_ms']:<11.1f} ms")
-    print(f"{'Total Retrieval (Mean)':<25} | {summaries['baseline']['latency_profile']['total_retrieval_mean_ms']:<8.1f} ms  | {summaries['onnx']['latency_profile']['total_retrieval_mean_ms']:<11.1f} ms  | {summaries['bge']['latency_profile']['total_retrieval_mean_ms']:<11.1f} ms")
-    print(f"{'Model Load Time':<25} | {'0.00':<8} s   | {summaries['onnx']['memory_profile']['model_load_time_sec']:<11.2f} s   | {summaries['bge']['memory_profile']['model_load_time_sec']:<11.2f} s")
-    print(f"{'RAM Growth from Model':<25} | {'0.0':<8} MB  | {summaries['onnx']['memory_profile']['load_delta_mb']:<11.1f} MB  | {summaries['bge']['memory_profile']['load_delta_mb']:<11.1f} MB")
-    print(f"{'Peak Process RAM':<25} | {summaries['baseline']['memory_profile']['peak_ram_mb']:<8.1f} MB  | {summaries['onnx']['memory_profile']['peak_ram_mb']:<11.1f} MB  | {summaries['bge']['memory_profile']['peak_ram_mb']:<11.1f} MB")
-    print(f"{'Time To First Token (TTFT)':<25} | {summaries['baseline']['latency_profile']['ttft_mean_ms']:<8.1f} ms  | {summaries['onnx']['latency_profile']['ttft_mean_ms']:<11.1f} ms  | {summaries['bge']['latency_profile']['ttft_mean_ms']:<11.1f} ms")
-    print("=" * 95)
+    print("-" * 90)
+    print(f"{'Candidate Retrieval (Mean)':<25} | {summaries['baseline']['latency_profile']['candidate_retrieval_mean_ms']:<8.1f} ms  | {summaries['onnx']['latency_profile']['candidate_retrieval_mean_ms']:<11.1f} ms")
+    print(f"{'Rerank Latency (Mean)':<25} | {'0.0':<8} ms  | {summaries['onnx']['latency_profile']['reranking_mean_ms']:<11.1f} ms")
+    print(f"{'Total Retrieval (Mean)':<25} | {summaries['baseline']['latency_profile']['total_retrieval_mean_ms']:<8.1f} ms  | {summaries['onnx']['latency_profile']['total_retrieval_mean_ms']:<11.1f} ms")
+    print(f"{'Model Load Time':<25} | {'0.00':<8} s   | {summaries['onnx']['memory_profile']['model_load_time_sec']:<11.2f} s")
+    print(f"{'RAM Growth from Model':<25} | {'0.0':<8} MB  | {summaries['onnx']['memory_profile']['load_delta_mb']:<11.1f} MB")
+    print(f"{'Peak Process RAM':<25} | {summaries['baseline']['memory_profile']['peak_ram_mb']:<8.1f} MB  | {summaries['onnx']['memory_profile']['peak_ram_mb']:<11.1f} MB")
+    print(f"{'Time To First Token (TTFT)':<25} | {summaries['baseline']['latency_profile']['ttft_mean_ms']:<8.1f} ms  | {summaries['onnx']['latency_profile']['ttft_mean_ms']:<11.1f} ms")
+    print("=" * 90)
 
     # 4. Verify Recall@20 Invariance Principle
     r20_base = summaries["baseline"]["metrics"]["recall_at_20"]
     r20_onnx = summaries["onnx"]["metrics"]["recall_at_20"]
-    r20_bge = summaries["bge"]["metrics"]["recall_at_20"]
-    print(f"\n[Verification] Recall@20 across runs: Baseline={r20_base}, ONNX={r20_onnx}, BGE={r20_bge}")
-    assert r20_base == r20_onnx == r20_bge, "CRITICAL ERROR: Recall@20 must be identical across all runs!"
-    print("[Verification PASSED] Recall@20 is mathematically identical across all 3 runs.")
+    print(f"\n[Verification] Recall@20 across runs: Baseline={r20_base}, ONNX={r20_onnx}")
+    assert r20_base == r20_onnx, "CRITICAL ERROR: Recall@20 must be identical across both runs!"
+    print("[Verification PASSED] Recall@20 is mathematically identical across both runs.")
 
     # 5. Run specialized domain tests
     await run_specialized_tests(doc_id)

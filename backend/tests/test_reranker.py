@@ -3,9 +3,8 @@
 Tests:
 1. BaselineReranker pass-through behavior.
 2. ONNXReranker scoring and ranking order.
-3. BGEReranker singleton caching and scoring.
-4. Error handling and refusal of silent fallback on missing or failed models.
-5. LangGraph rerank_node integration (top-k filtering, domain rules, honest refusal for off-topic).
+3. Error handling and refusal of silent fallback on missing or failed models.
+4. LangGraph rerank_node integration (top-k filtering, domain rules, honest refusal for off-topic).
 """
 
 import pytest
@@ -15,7 +14,6 @@ from types import SimpleNamespace
 
 from app.rag.reranker import (
     BaselineReranker,
-    BGEReranker,
     ONNXReranker,
     get_reranker,
     BaseReranker,
@@ -93,37 +91,17 @@ def test_onnx_reranker_execution():
     assert results[0].rerank_score > results[1].rerank_score
 
 
-def test_bge_reranker_execution():
-    doc_id = uuid.uuid4()
-    chunks = [
-        make_dummy_chunk(doc_id, "The capital of France is Paris, located on the River Seine.", 0.5),
-        make_dummy_chunk(doc_id, "SQL uses SELECT, FROM and WHERE clauses to query database tables.", 0.9),
-    ]
-
-    reranker = get_reranker("bge")
-    assert isinstance(reranker, BGEReranker)
-
-    query = "Where is Paris located?"
-    results = reranker.rerank(query, chunks, top_k=1)
-
-    assert len(results) == 1
-    assert "Paris" in results[0].content
-    assert results[0].rerank_rank == 1
-    assert results[0].rerank_score is not None
-
-
 def test_reranker_refuses_silent_fallback_on_error():
     """Verify that if reranker model scoring throws an exception, it raises RuntimeError rather than falling back silently."""
-    reranker = BaselineReranker()
     doc_id = uuid.uuid4()
     chunks = [make_dummy_chunk(doc_id, "Test", 0.5)]
 
-    # Test BGEReranker error handling
-    with patch.object(BGEReranker, "_model") as mock_model:
-        mock_model.compute_score.side_effect = RuntimeError("GPU out of memory")
-        bge = BGEReranker.__new__(BGEReranker)
-        with pytest.raises(RuntimeError, match="BGE reranker failed during inference"):
-            bge.rerank("query", chunks)
+    # Test ONNXReranker error handling
+    onnx = get_reranker("onnx")
+    with patch.object(ONNXReranker, "_session") as mock_session:
+        mock_session.run.side_effect = RuntimeError("GPU out of memory")
+        with pytest.raises(RuntimeError, match="ONNX reranker failed during inference"):
+            onnx.rerank("query", chunks)
 
 
 @pytest.mark.asyncio

@@ -20,7 +20,7 @@ class ChatStreamRequest(BaseModel):
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     save_user_message: bool = Field(default=True, description="Whether to persist the last user turn. Set False when retrying or regenerating.")
     document_ids: Optional[List[uuid.UUID]] = Field(default=None, description="Optional document UUIDs for RAG context grounding.")
-    reranker_type: Optional[str] = Field(default=None, description="Optional reranker override: 'baseline', 'bge', 'onnx'.")
+    reranker_type: Optional[str] = Field(default=None, description="Optional reranker override: 'baseline', 'onnx'.")
 
 
 class MessageResponse(BaseModel):
@@ -94,6 +94,8 @@ class ConversationDetailResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     messages: List[MessageResponse] = []
+    summary: Optional[str] = None
+    summary_through_index: Optional[int] = None
 
 
 class ModelInfo(BaseModel):

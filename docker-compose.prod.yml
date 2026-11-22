@@ -1,0 +1,117 @@
+name: tark-studio-prod
+
+services:
+  # ----------------------------------------------------------------------------
+  # PostgreSQL 16 with pgvector Extension
+  # ----------------------------------------------------------------------------
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: tark_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tark_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Database password must be set}
+      POSTGRES_DB: ${POSTGRES_DB:-tark_studio}
+    volumes:
+      - tark_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tark_user} -d ${POSTGRES_DB:-tark_studio}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - tark_internal
+
+  # ----------------------------------------------------------------------------
+  # Ollama Embedding Service (nomic-embed-text)
+  # ----------------------------------------------------------------------------
+  ollama:
+    image: ollama/ollama:latest
+    container_name: tark_ollama
+    restart: unless-stopped
+    volumes:
+      - tark_ollama_data:/root/.ollama
+    networks:
+      - tark_internal
+
+  # ----------------------------------------------------------------------------
+  # TARK Studio FastAPI Backend & LangGraph Orchestration
+  # ----------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tark_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      APP_HOST: "0.0.0.0"
+      APP_PORT: "8000"
+      UVICORN_WORKERS: "2"
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-tark_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-tark_studio}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tark_user}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-tark_studio}
+      OLLAMA_BASE_URL: http://ollama:11434
+      GROQ_API_KEY: ${GROQ_API_KEY:?Groq API key must be set}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      RERANKER_TYPE: onnx
+      RERANKER_TOP_K: "5"
+      RERANKER_CANDIDATE_K: "20"
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://tark-studio.pages.dev}
+      MEMORY_TOKEN_BUDGET: "2048"
+      MEMORY_SUMMARY_THRESHOLD_TOKENS: "1024"
+    volumes:
+      - tark_uploads:/app/uploads
+      - tark_models_cache:/root/.cache
+    networks:
+      - tark_internal
+
+  # ----------------------------------------------------------------------------
+  # Caddy Reverse Proxy & Automatic HTTPS (DuckDNS TLS)
+  # ----------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: tark_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Domain name required (e.g. your-subdomain.duckdns.org)}
+      ACME_EMAIL: ${ACME_EMAIL:?Valid email required for Let's Encrypt TLS}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - tark_caddy_data:/data
+      - tark_caddy_config:/config
+    depends_on:
+      - backend
+    networks:
+      - tark_internal
+
+networks:
+  tark_internal:
+    driver: bridge
+
+volumes:
+  tark_postgres_data:
+    name: tark_postgres_data
+  tark_ollama_data:
+    name: tark_ollama_data
+  tark_uploads:
+    name: tark_uploads
+  tark_models_cache:
+    name: tark_models_cache
+  tark_caddy_data:
+    name: tark_caddy_data
+  tark_caddy_config:
+    name: tark_caddy_config

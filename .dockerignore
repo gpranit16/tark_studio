@@ -1,0 +1,40 @@
+# Git and version control
+.git
+.gitignore
+
+# Frontend code (deployed separately to Cloudflare Pages)
+frontend/
+
+# Python cache & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+backend/.venv/
+env/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Tests & Evaluation artifacts
+backend/tests/
+backend/eval/
+backend/scripts/
+
+# Uploads & local data
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Environment files & secrets
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Documentation & Reports
+docs/
+*.md
+
+# Local caches
+backend/models_cache/

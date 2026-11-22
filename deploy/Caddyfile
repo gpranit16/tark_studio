@@ -1,0 +1,40 @@
+# ==============================================================================
+# TARK Studio — Caddy Reverse Proxy Configuration
+# Automatic HTTPS via Let's Encrypt / ZeroSSL for DuckDNS
+# Optimized for Server-Sent Events (SSE) Streaming
+# ==============================================================================
+
+{
+    email {$ACME_EMAIL:admin@example.com}
+    admin off
+}
+
+{$DOMAIN:tark-studio.duckdns.org} {
+    # Encode with gzip and zstd for general JSON / API endpoints
+    encode zstd gzip
+
+    # Reverse proxy to FastAPI backend
+    reverse_proxy backend:8000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+
+        # CRITICAL for SSE: Disable response buffering so LLM tokens stream in real time
+        flush_interval -1
+    }
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    # Access logging
+    log {
+        output stdout
+        format console
+    }
+}

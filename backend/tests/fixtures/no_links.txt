@@ -1,0 +1,9 @@
+This is a plain text document with no hyperlinks.
+
+It contains several paragraphs of normal prose. There are no URLs, no hyperlinks,
+and no embedded references of any kind.
+
+The purpose of this file is to verify that the extraction pipeline handles
+documents with zero links correctly and returns an empty link list without errors.
+
+Paragraph three: more plain text, no URLs here either. The end.

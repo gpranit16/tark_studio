@@ -25,6 +25,26 @@ class ChatState(TypedDict, total=False):
     retrieved_chunks: Optional[List[dict]]
     citations: Optional[List[dict]]
     reranker_type: Optional[str]
+    retrieval_latency_ms: Optional[float]
+    rerank_latency_ms: Optional[float]
+    tok_ms: Optional[float]
+    inf_ms: Optional[float]
+    resolved_query: Optional[str]
+    is_followup: Optional[bool]
+    is_correction: Optional[bool]
+    dense_candidates_count: Optional[int]
+    sparse_candidates_count: Optional[int]
+    fused_candidates_count: Optional[int]
+    # Conversation memory fields
+    thread_id: Optional[str]
+    summary: Optional[str]
+    summary_through_index: Optional[int]
+    recent_messages: Optional[List[dict]]
+    estimated_prompt_tokens: Optional[int]
+    memory_overhead_ms: Optional[float]
+    memory_summary_status: Optional[str]
+    memory_recent_tokens: Optional[int]
+    memory_summary_turns: Optional[int]
 
 
 class TitleState(TypedDict, total=False):

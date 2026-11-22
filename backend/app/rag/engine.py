@@ -9,7 +9,7 @@ import uuid
 import logging
 from datetime import datetime, timezone
 from typing import Optional, List
-from sqlalchemy import select
+from sqlalchemy import select, delete
 
 from app.database import async_session_factory, Document, DocumentChunk
 from app.rag.parser import parse_document
@@ -91,6 +91,9 @@ async def ingest_document_file(
             doc.status = "completed"
             doc.metadata_json = meta
             doc.updated_at = datetime.now(timezone.utc)
+
+        # Delete any existing chunks for this document before adding new ones
+        await session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == doc_id))
 
         # Create chunk entities
         for chunk_meta, emb in zip(chunks_data, embeddings):

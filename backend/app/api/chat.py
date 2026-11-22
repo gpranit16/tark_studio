@@ -149,6 +149,20 @@ async def get_conversation(conversation_id: uuid.UUID):
             )
 
         messages_sorted = sorted(conv.messages, key=lambda m: m.created_at)
+
+        # Retrieve summary state from LangGraph checkpoint if available
+        checkpoint_summary: Optional[str] = None
+        checkpoint_summary_idx: Optional[int] = None
+        try:
+            from app.ai.graph import get_compiled_graph
+            graph = await get_compiled_graph()
+            snap = await graph.aget_state({"configurable": {"thread_id": str(conversation_id)}})
+            if snap and snap.values:
+                checkpoint_summary = snap.values.get("summary")
+                checkpoint_summary_idx = snap.values.get("summary_through_index")
+        except Exception:
+            pass
+
         return ConversationDetailResponse(
             id=conv.id,
             title=conv.title,
@@ -157,6 +171,8 @@ async def get_conversation(conversation_id: uuid.UUID):
             is_archived=conv.is_archived,
             created_at=conv.created_at,
             updated_at=conv.updated_at,
+            summary=checkpoint_summary,
+            summary_through_index=checkpoint_summary_idx,
             messages=[
                 MessageResponse(
                     id=m.id,
