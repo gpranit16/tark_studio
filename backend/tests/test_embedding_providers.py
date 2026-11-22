@@ -24,31 +24,36 @@ async def test_ollama_provider_defaults():
 
 @pytest.mark.asyncio
 async def test_cloudflare_provider_dimensions_and_model():
-    """Ensure Cloudflare provider targets @cf/google/embeddinggemma-2 with 768 dimensions."""
+    """Ensure Cloudflare provider targets @cf/baai/bge-base-en-v1.5 with 768 dimensions."""
     provider = CloudflareEmbeddings(
         account_id="mock_acc_id",
         api_token="mock_token",
-        model="@cf/google/embeddinggemma-2",
+        model="@cf/baai/bge-base-en-v1.5",
     )
     assert provider.dimension == 768
-    assert provider.model_name == "@cf/google/embeddinggemma-2"
+    assert provider.model_name == "@cf/baai/bge-base-en-v1.5"
 
 
 def test_cloudflare_input_formatting():
-    """Ensure task instruction prefix is applied to search queries."""
-    provider = CloudflareEmbeddings(account_id="acc", api_token="tok")
-    
-    # Query must have task instruction prefix
-    q_fmt = provider._format_input("What is TARK Studio?", is_query=True)
-    assert q_fmt == "task: search result | query: What is TARK Studio?"
+    """Ensure task instruction prefix is applied appropriately based on model."""
+    bge_provider = CloudflareEmbeddings(account_id="acc", api_token="tok", model="@cf/baai/bge-base-en-v1.5")
+    q_bge = bge_provider._format_input("What is TARK Studio?", is_query=True)
+    assert q_bge == "Represent this sentence for searching relevant passages: What is TARK Studio?"
 
     # Already formatted query is not double-prefixed
-    q_pre = provider._format_input("task: search result | query: What is TARK Studio?", is_query=True)
-    assert q_pre == "task: search result | query: What is TARK Studio?"
+    q_bge_pre = bge_provider._format_input(
+        "Represent this sentence for searching relevant passages: What is TARK Studio?", is_query=True
+    )
+    assert q_bge_pre == "Represent this sentence for searching relevant passages: What is TARK Studio?"
 
     # Passage / document chunk is left as clean content
-    doc_fmt = provider._format_input("TARK Studio is a local-first workspace.", is_query=False)
-    assert doc_fmt == "TARK Studio is a local-first workspace."
+    doc_bge = bge_provider._format_input("TARK Studio is a local-first workspace.", is_query=False)
+    assert doc_bge == "TARK Studio is a local-first workspace."
+
+    # Google EmbeddingGemma format
+    gemma_provider = CloudflareEmbeddings(account_id="acc", api_token="tok", model="@cf/google/embeddinggemma-2")
+    q_gemma = gemma_provider._format_input("What is TARK Studio?", is_query=True)
+    assert q_gemma == "task: search result | query: What is TARK Studio?"
 
 
 @pytest.mark.asyncio
@@ -65,7 +70,7 @@ async def test_cloudflare_embeddings_success_dict_format():
         },
     }
 
-    provider = CloudflareEmbeddings(account_id="acc123", api_token="tok456")
+    provider = CloudflareEmbeddings(account_id="acc123", api_token="tok456", model="@cf/baai/bge-base-en-v1.5")
 
     with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
         mock_post.return_value = mock_response
@@ -75,7 +80,7 @@ async def test_cloudflare_embeddings_success_dict_format():
         assert result == fake_vector
         mock_post.assert_called_once()
         call_url = mock_post.call_args[0][0]
-        assert "acc123/ai/run/@cf/google/embeddinggemma-2" in call_url
+        assert "acc123/ai/run/@cf/baai/bge-base-en-v1.5" in call_url
         headers = mock_post.call_args[1]["headers"]
         assert headers["Authorization"] == "Bearer tok456"
 
@@ -94,7 +99,7 @@ async def test_cloudflare_embeddings_success_list_format():
         },
     }
 
-    provider = CloudflareEmbeddings(account_id="acc123", api_token="tok456")
+    provider = CloudflareEmbeddings(account_id="acc123", api_token="tok456", model="@cf/baai/bge-base-en-v1.5")
 
     with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
         mock_post.return_value = mock_response
@@ -126,4 +131,4 @@ async def test_proxy_dynamic_provider_selection():
         # Reset proxy cache for test
         proxy._provider_cache.clear()
         assert isinstance(proxy._resolve_provider(), CloudflareEmbeddings)
-        assert proxy.model_name == "@cf/google/embeddinggemma-2"
+        assert proxy.model_name == "@cf/baai/bge-base-en-v1.5"

@@ -220,6 +220,7 @@ def parse_pdf(file_path: str, filename: str) -> ParsedDocument:
         # Extract structured tables (PyMuPDF find_tables)
         page_tables: List[Dict[str, Any]] = []
         table_markdown_blocks: List[str] = []
+        table_rects: List[fitz.Rect] = []
         try:
             tabs = page.find_tables()
             for t_idx, tab in enumerate(tabs.tables):
@@ -237,16 +238,40 @@ def parse_pdf(file_path: str, filename: str) -> ParsedDocument:
                         "header": header,
                         "rows_count": len(rows),
                     })
+                    if hasattr(tab, "bbox") and tab.bbox:
+                        table_rects.append(fitz.Rect(tab.bbox))
         except Exception as exc:
             logger.warning(f"Failed to extract tables on page {viewer_page}: {exc}")
 
-        # Assemble augmented page text preserving reading order, tables, and hyperlinks
-        augmented_text_parts = [text]
+        # Assemble page text: if structured tables exist, replace the raw table text blocks with clean markdown tables in reading order
+        if table_rects and table_markdown_blocks:
+            non_table_blocks = []
+            for b in page.get_text("blocks"):
+                # b = (x0, y0, x1, y1, text, block_no, block_type)
+                if len(b) >= 5 and b[4].strip() and (len(b) < 7 or b[6] == 0):
+                    b_rect = fitz.Rect(b[:4])
+                    # Check if block falls inside any table bbox
+                    in_table = any(
+                        b_rect.intersects(t_rect) and (b_rect & t_rect).get_area() > 0.4 * b_rect.get_area()
+                        for t_rect in table_rects
+                    )
+                    if not in_table:
+                        non_table_blocks.append((b[1], b[4].strip()))
 
-        if table_markdown_blocks:
-            augmented_text_parts.append(
-                f"\n[Page {viewer_page} Extracted Tables]:\n" + "\n\n".join(table_markdown_blocks)
+            ordered_items = non_table_blocks + [
+                (t_rect.y0, f"[Page {viewer_page} Extracted Table]:\n{md}")
+                for t_rect, md in zip(table_rects, table_markdown_blocks)
+            ]
+            ordered_items.sort(key=lambda item: item[0])
+            body_text = "\n\n".join(
+                unicodedata.normalize("NFKC", item_text).replace("\x00", "").strip()
+                for _, item_text in ordered_items
+                if item_text
             )
+        else:
+            body_text = text
+
+        augmented_text_parts = [body_text]
 
         if page_links:
             seen_uris = set()

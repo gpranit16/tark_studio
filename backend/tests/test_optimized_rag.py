@@ -27,7 +27,7 @@ async def test_cloudflare_concurrent_batch_execution():
     texts = [f"Text chunk {i}" for i in range(10)]  # 3 batches: 4, 4, 2
     
     def side_effect(url, headers, json):
-        input_texts = json.get("input", [])
+        input_texts = json.get("text") or json.get("input", [])
         mock_res = MagicMock(spec=httpx.Response)
         mock_res.status_code = 200
         # Return unique embeddings based on chunk text to verify ordering
@@ -102,7 +102,7 @@ def test_proxy_dynamic_routing_production_vs_development():
             with patch.object(settings, "cloudflare_api_token", "mock_cf_token"):
                 with patch.object(settings, "embedding_provider", "ollama"):  # even if unset or default
                     provider = proxy._resolve_provider()
-                    assert provider.model_name == "@cf/google/embeddinggemma-2"
+                    assert provider.model_name == "@cf/baai/bge-base-en-v1.5"
 
 
 def test_pdf_plain_text_url_and_heading_extraction(tmp_path):

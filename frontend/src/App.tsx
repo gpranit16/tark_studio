@@ -1846,7 +1846,7 @@ export default function App() {
                       </div>
                     ))}
 
-                  {isUploadingDoc && (
+                  {isUploadingDoc && selectedDocIds.length === 0 && (
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#20271F] border border-ember-copper/60 text-xs font-mono text-[#E59A64] animate-pulse">
                       <Loader2 size={13} className="animate-spin text-ember-copper" />
                       <span>Uploading & Indexing...</span>

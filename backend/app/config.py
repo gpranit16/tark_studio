@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     cloudflare_account_id: Optional[str] = Field(default=None, alias="CLOUDFLARE_ACCOUNT_ID")
     cloudflare_api_token: Optional[str] = Field(default=None, alias="CLOUDFLARE_API_TOKEN")
     cloudflare_embedding_model: str = Field(
-        default="@cf/google/embeddinggemma-2", alias="CLOUDFLARE_EMBEDDING_MODEL"
+        default="@cf/baai/bge-base-en-v1.5", alias="CLOUDFLARE_EMBEDDING_MODEL"
     )
 
     # Reranker settings (baseline, onnx)

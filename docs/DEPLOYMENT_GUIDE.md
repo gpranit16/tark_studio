@@ -236,7 +236,7 @@ For fully autonomous cloud deployments (zero dependence on a local PC, local Oll
 - **Frontend**: Cloudflare Pages (`https://tark-studio.pages.dev`)
 - **Backend**: Render Web Service (Docker runtime)
 - **Database**: Neon Serverless PostgreSQL 16+ with `pgvector`
-- **Embeddings**: Cloudflare Workers AI (`@cf/google/embeddinggemma-2`, 768 dimensions)
+- **Embeddings**: Cloudflare Workers AI (`@cf/baai/bge-base-en-v1.5`, 768 dimensions)
 - **Reranker**: Xenova INT8 Cross-Encoder (`Xenova/ms-marco-MiniLM-L-6-v2`)
 - **LLM**: Groq API (`llama-3.3-70b-versatile`)
 
@@ -255,5 +255,5 @@ APP_PORT=10000
 EMBEDDING_PROVIDER=cloudflare
 CLOUDFLARE_ACCOUNT_ID=your_cloudflare_account_id
 CLOUDFLARE_API_TOKEN=your_cloudflare_api_token
-CLOUDFLARE_EMBEDDING_MODEL=@cf/google/embeddinggemma-2
+CLOUDFLARE_EMBEDDING_MODEL=@cf/baai/bge-base-en-v1.5
 ```

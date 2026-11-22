@@ -2,7 +2,7 @@
 
 Provides 768-dimensional semantic dense vector embeddings for RAG:
 1. Ollama (default for local development, model: nomic-embed-text, 768d)
-2. Cloudflare Workers AI (production, model: @cf/google/embeddinggemma-2, 768d)
+2. Cloudflare Workers AI (production, model: @cf/baai/bge-base-en-v1.5 or @cf/google/embeddinggemma-2, 768d)
 
 Architecture guarantees:
 - Local development is 100% preserved (Ollama + nomic-embed-text).
@@ -186,7 +186,7 @@ _query_cache = _EmbeddingLRUCache(QUERY_CACHE_MAX_SIZE)
 
 
 class CloudflareEmbeddings(BaseEmbeddingProvider):
-    """Cloudflare Workers AI client for EmbeddingGemma-2 (768d, Production).
+    """Cloudflare Workers AI client for BGE-Base-EN-v1.5 / EmbeddingGemma-2 (768d, Production).
 
     Calls Cloudflare Workers AI HTTPS REST API endpoint directly.
     Completely independent of local machines, tunnels, or Ollama daemons.
@@ -200,13 +200,13 @@ class CloudflareEmbeddings(BaseEmbeddingProvider):
         self,
         account_id: Optional[str] = None,
         api_token: Optional[str] = None,
-        model: str = "@cf/google/embeddinggemma-2",
+        model: str = "@cf/baai/bge-base-en-v1.5",
         batch_size: int = CLOUDFLARE_DEFAULT_BATCH_SIZE,
         timeout: float = 60.0,
     ):
         self.account_id = (account_id or settings.cloudflare_account_id or "").strip()
         self.api_token = (api_token or settings.cloudflare_api_token or "").strip()
-        self.model = (model or settings.cloudflare_embedding_model or "@cf/google/embeddinggemma-2").strip()
+        self.model = (model or settings.cloudflare_embedding_model or "@cf/baai/bge-base-en-v1.5").strip()
         self.batch_size = batch_size
         self.timeout = timeout
         self._client: Optional[httpx.AsyncClient] = None
@@ -235,11 +235,24 @@ class CloudflareEmbeddings(BaseEmbeddingProvider):
         return EMBEDDING_DIM
 
     def _format_input(self, text: str, is_query: bool = False) -> str:
-        """Format text with Google EmbeddingGemma task instructions if appropriate."""
+        """Format text with provider/model-specific task instructions if required."""
         cleaned = text.strip()
-        if is_query:
+        if not is_query or not cleaned:
+            return cleaned
+
+        # Google EmbeddingGemma format
+        if "embeddinggemma" in self.model.lower():
             if not cleaned.lower().startswith("task:"):
                 return f"task: search result | query: {cleaned}"
+            return cleaned
+
+        # BAAI BGE format (asymmetry query instruction)
+        if "bge-" in self.model.lower():
+            prefix = "Represent this sentence for searching relevant passages: "
+            if not cleaned.startswith(prefix):
+                return f"{prefix}{cleaned}"
+            return cleaned
+
         return cleaned
 
     async def get_embedding(self, text: str, is_query: bool = True) -> List[float]:
@@ -292,13 +305,13 @@ class CloudflareEmbeddings(BaseEmbeddingProvider):
         async def _fetch_single_batch(batch_idx: int, batch: List[str]) -> List[List[float]]:
             async with sem:
                 client = self._get_client()
-                # Cloudflare Workers AI Embedding schema supports 'input' array or 'text' array
-                payload: Dict[str, Any] = {"input": batch}
+                # Cloudflare Workers AI Embedding schema supports 'text' array or 'input' array
+                payload: Dict[str, Any] = {"text": batch}
                 res = await client.post(url, headers=headers, json=payload)
 
-                # Fallback to 'text' parameter if 'input' fails with 400
+                # Fallback to 'input' parameter if 'text' fails with 400
                 if res.status_code == 400:
-                    payload = {"text": batch}
+                    payload = {"input": batch}
                     res = await client.post(url, headers=headers, json=payload)
 
                 if res.status_code != 200:
