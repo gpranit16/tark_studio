@@ -76,7 +76,7 @@ async def test_checkpointer_raises_when_postgres_fails():
     """Verify that get_checkpointer raises a clear RuntimeError when Postgres fails, forbidding silent fallback."""
     await close_checkpointer()
 
-    with patch("app.ai.graph.AsyncPostgresSaver.from_conn_string", side_effect=ConnectionRefusedError("DB offline")):
+    with patch("app.ai.graph.AsyncConnectionPool.open", side_effect=ConnectionRefusedError("DB offline")):
         with pytest.raises(RuntimeError) as exc_info:
             await get_checkpointer()
 

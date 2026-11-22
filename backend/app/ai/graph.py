@@ -21,6 +21,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from psycopg_pool import AsyncConnectionPool
 
 from app.config import settings
 from app.ai.state import ChatState, TitleState
@@ -38,7 +39,7 @@ from app.ai.memory import (
 logger = logging.getLogger(__name__)
 
 # Checkpointer singletons
-_checkpointer_cm = None
+_checkpointer_pool: Optional[AsyncConnectionPool] = None
 _postgres_checkpointer: Optional[AsyncPostgresSaver] = None
 _active_compiled_graph = None
 _test_checkpointer: Optional[BaseCheckpointSaver] = None
@@ -68,30 +69,47 @@ def get_postgres_connection_string() -> str:
 
 
 async def get_checkpointer() -> BaseCheckpointSaver:
-    """Return persistent AsyncPostgresSaver by default.
+    """Return persistent AsyncPostgresSaver backed by AsyncConnectionPool.
     
     Raises RuntimeError if PostgreSQL is unavailable.
     Silent fallback to MemorySaver is forbidden; MemorySaver is only permitted
     when explicitly configured via set_test_checkpointer().
     """
-    global _checkpointer_cm, _postgres_checkpointer, _test_checkpointer
+    global _checkpointer_pool, _postgres_checkpointer, _test_checkpointer
 
     # Explicit test checkpointer permitted only if explicitly registered
     if _test_checkpointer is not None:
         return _test_checkpointer
 
-    if _postgres_checkpointer is not None:
+    if _postgres_checkpointer is not None and _checkpointer_pool is not None and not _checkpointer_pool.closed:
         return _postgres_checkpointer
 
     try:
         conn_string = get_postgres_connection_string()
-        _checkpointer_cm = AsyncPostgresSaver.from_conn_string(conn_string)
-        _postgres_checkpointer = await _checkpointer_cm.__aenter__()
+        if _checkpointer_pool is None or _checkpointer_pool.closed:
+            _checkpointer_pool = AsyncConnectionPool(
+                conninfo=conn_string,
+                max_size=10,
+                min_size=1,
+                max_idle=60.0,
+                check=AsyncConnectionPool.check_connection,
+                open=False,
+            )
+            await _checkpointer_pool.open()
+
+        _postgres_checkpointer = AsyncPostgresSaver(conn=_checkpointer_pool)
         await _postgres_checkpointer.setup()
-        logger.info("LangGraph AsyncPostgresSaver initialized successfully.")
+        logger.info("LangGraph AsyncPostgresSaver initialized successfully with AsyncConnectionPool.")
         return _postgres_checkpointer
     except Exception as exc:
         logger.error(f"PostgreSQL checkpointer initialization failed: {exc}")
+        if _checkpointer_pool is not None:
+            try:
+                await _checkpointer_pool.close()
+            except Exception:
+                pass
+            _checkpointer_pool = None
+        _postgres_checkpointer = None
         raise RuntimeError(
             f"PostgreSQL checkpointer is unavailable: {exc}. "
             "PostgreSQL checkpointing is required for TARK Studio session state. "
@@ -101,16 +119,21 @@ async def get_checkpointer() -> BaseCheckpointSaver:
 
 async def close_checkpointer():
     """Dispose of checkpointer connection pool during shutdown."""
-    global _checkpointer_cm, _postgres_checkpointer, _active_compiled_graph, _test_checkpointer
+    global _checkpointer_pool, _postgres_checkpointer, _active_compiled_graph, _test_checkpointer
     _active_compiled_graph = None
     _test_checkpointer = None
-    if _checkpointer_cm is not None:
+    _postgres_checkpointer = None
+    if _checkpointer_pool is not None:
         try:
-            await _checkpointer_cm.__aexit__(None, None, None)
+            await _checkpointer_pool.close()
         except Exception:
             pass
-        _checkpointer_cm = None
-        _postgres_checkpointer = None
+        _checkpointer_pool = None
+
+
+async def reset_checkpointer():
+    """Reset checkpointer pool and compiled graph when a closed connection is encountered."""
+    await close_checkpointer()
 
 
 async def memory_node(state: ChatState, writer: StreamWriter) -> dict:
@@ -830,31 +853,55 @@ async def stream_chat_workflow(
         }
     }
 
-    try:
-        async for chunk in compiled_graph.astream(
-            initial_state,
-            stream_mode="custom",
-            config=config,
-        ):
-            # Check for client abort / disconnect
-            if request and await request.is_disconnected():
-                logger.info(f"Client disconnected; halting LangGraph thread {effective_thread_id}.")
-                break
+    retried = False
+    while True:
+        yielded_any = False
+        try:
+            async for chunk in compiled_graph.astream(
+                initial_state,
+                stream_mode="custom",
+                config=config,
+            ):
+                # Check for client abort / disconnect
+                if request and await request.is_disconnected():
+                    logger.info(f"Client disconnected; halting LangGraph thread {effective_thread_id}.")
+                    return
 
-            event_type = chunk.get("type", "token")
-            data_dict = chunk.get("data", {})
+                event_type = chunk.get("type", "token")
+                data_dict = chunk.get("data", {})
 
-            # Enrich meta event with conversation_id for client tracking
-            if event_type == "meta":
-                data_dict["conversation_id"] = effective_conv_id
+                # Enrich meta event with conversation_id for client tracking
+                if event_type == "meta":
+                    data_dict["conversation_id"] = effective_conv_id
 
-            data_str = json.dumps(data_dict)
-            yield f"event: {event_type}\ndata: {data_str}\n\n"
+                data_str = json.dumps(data_dict)
+                yield f"event: {event_type}\ndata: {data_str}\n\n"
+                yielded_any = True
+            return
 
-    except Exception as exc:
-        logger.error(f"Unexpected error in LangGraph stream execution: {exc}")
-        err_str = json.dumps({"error": str(exc), "conversation_id": effective_conv_id})
-        yield f"event: error\ndata: {err_str}\n\n"
+        except Exception as exc:
+            err_msg = str(exc).lower()
+            is_conn_error = (
+                "connection is closed" in err_msg
+                or "closed connection" in err_msg
+                or "connection already closed" in err_msg
+                or "operationalerror" in err_msg
+                or "broken pipe" in err_msg
+            )
+            if not retried and not yielded_any and is_conn_error:
+                logger.warning(
+                    f"PostgreSQL connection drop detected ({exc}); "
+                    "resetting checkpointer pool and transparently retrying stream..."
+                )
+                await reset_checkpointer()
+                compiled_graph = await get_compiled_graph()
+                retried = True
+                continue
+
+            logger.error(f"Unexpected error in LangGraph stream execution: {exc}")
+            err_str = json.dumps({"error": str(exc), "conversation_id": effective_conv_id})
+            yield f"event: error\ndata: {err_str}\n\n"
+            return
 
 
 # ==============================================================================

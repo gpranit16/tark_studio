@@ -42,6 +42,9 @@ async def test_stream_cancellation_does_not_save_incomplete_assistant_response(t
             async for chunk in response.aiter_text():
                 chunks.append(chunk)
 
+        # Allow cancellation to propagate to background tasks before assertions
+        await asyncio.sleep(0.1)
+
         # Verify PostgreSQL database state:
         # User message was saved concurrently
         # But INCOMPLETE assistant response must NOT be saved!
