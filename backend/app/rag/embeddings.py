@@ -10,9 +10,12 @@ Architecture guarantees:
 - Unified 768-dimensional vector space across both providers for pgvector compatibility.
 """
 
+import os
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from typing import List, Optional, Any, Dict
+from collections import OrderedDict
 import httpx
 
 from app.config import settings
@@ -22,6 +25,30 @@ logger = logging.getLogger(__name__)
 EMBEDDING_DIM = 768
 DEFAULT_BATCH_SIZE = 32
 CLOUDFLARE_DEFAULT_BATCH_SIZE = 16
+QUERY_CACHE_MAX_SIZE = 256
+
+
+class _EmbeddingLRUCache:
+    """Thread-safe LRU cache for query embeddings to eliminate repeated inference latency."""
+
+    def __init__(self, maxsize: int = QUERY_CACHE_MAX_SIZE):
+        self._cache: OrderedDict[str, List[float]] = OrderedDict()
+        self._maxsize = maxsize
+        self._lock = asyncio.Lock()
+
+    async def get(self, key: str) -> Optional[List[float]]:
+        async with self._lock:
+            if key in self._cache:
+                self._cache.move_to_end(key)
+                return self._cache[key]
+            return None
+
+    async def put(self, key: str, value: List[float]) -> None:
+        async with self._lock:
+            self._cache[key] = value
+            self._cache.move_to_end(key)
+            if len(self._cache) > self._maxsize:
+                self._cache.popitem(last=False)
 
 
 class BaseEmbeddingProvider(ABC):
@@ -154,11 +181,19 @@ class OllamaEmbeddings(BaseEmbeddingProvider):
         return False
 
 
+# Global query embedding cache shared across requests
+_query_cache = _EmbeddingLRUCache(QUERY_CACHE_MAX_SIZE)
+
+
 class CloudflareEmbeddings(BaseEmbeddingProvider):
     """Cloudflare Workers AI client for EmbeddingGemma-2 (768d, Production).
 
     Calls Cloudflare Workers AI HTTPS REST API endpoint directly.
     Completely independent of local machines, tunnels, or Ollama daemons.
+    Features:
+    - Persistent HTTP connection pooling with keep-alive
+    - Bounded concurrent batch execution (asyncio.Semaphore)
+    - Thread-safe LRU caching for query embeddings
     """
 
     def __init__(
@@ -174,12 +209,22 @@ class CloudflareEmbeddings(BaseEmbeddingProvider):
         self.model = (model or settings.cloudflare_embedding_model or "@cf/google/embeddinggemma-2").strip()
         self.batch_size = batch_size
         self.timeout = timeout
+        self._client: Optional[httpx.AsyncClient] = None
 
         if not self.account_id or not self.api_token:
             logger.warning(
                 "CloudflareEmbeddings initialized without complete credentials. "
                 "Ensure CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN are configured in production."
             )
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Get or initialize a pooled, persistent AsyncClient with keep-alive."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                timeout=httpx.Timeout(self.timeout, connect=15.0),
+                limits=httpx.Limits(max_keepalive_connections=20, max_connections=50, keepalive_expiry=30.0),
+            )
+        return self._client
 
     @property
     def model_name(self) -> str:
@@ -198,16 +243,29 @@ class CloudflareEmbeddings(BaseEmbeddingProvider):
         return cleaned
 
     async def get_embedding(self, text: str, is_query: bool = True) -> List[float]:
-        """Generate 768d vector for a single query or text passage."""
+        """Generate 768d vector for a single query or text passage with LRU caching for queries."""
+        cleaned = text.strip()
+        if is_query:
+            cache_key = f"cf:{self.model}:{cleaned}"
+            cached = await _query_cache.get(cache_key)
+            if cached is not None:
+                return cached
+
         results = await self.get_embeddings_batch([text], is_query=is_query)
         if not results:
             raise RuntimeError(f"Cloudflare Workers AI returned no embeddings for model '{self.model}'.")
-        return results[0]
+        emb = results[0]
+
+        if is_query:
+            cache_key = f"cf:{self.model}:{cleaned}"
+            await _query_cache.put(cache_key, emb)
+
+        return emb
 
     async def get_embeddings_batch(
         self, texts: List[str], is_query: bool = False
     ) -> List[List[float]]:
-        """Generate 768d embeddings in batches via Cloudflare Workers AI REST API."""
+        """Generate 768d embeddings concurrently in batches via Cloudflare Workers AI REST API."""
         if not texts:
             return []
 
@@ -223,12 +281,17 @@ class CloudflareEmbeddings(BaseEmbeddingProvider):
             "Content-Type": "application/json",
         }
 
-        all_embeddings: List[List[float]] = []
+        # Divide into batches
+        batches = [
+            formatted_texts[i : i + self.batch_size]
+            for i in range(0, len(formatted_texts), self.batch_size)
+        ]
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            for i in range(0, len(formatted_texts), self.batch_size):
-                batch = formatted_texts[i : i + self.batch_size]
+        sem = asyncio.Semaphore(4)
 
+        async def _fetch_single_batch(batch_idx: int, batch: List[str]) -> List[List[float]]:
+            async with sem:
+                client = self._get_client()
                 # Cloudflare Workers AI Embedding schema supports 'input' array or 'text' array
                 payload: Dict[str, Any] = {"input": batch}
                 res = await client.post(url, headers=headers, json=payload)
@@ -256,8 +319,8 @@ class CloudflareEmbeddings(BaseEmbeddingProvider):
                         f"Cloudflare Workers AI returned success but empty 'data' in result: {body}"
                     )
 
-                # Parse vector format: either array of floats [[...], [...]] or objects [{"embedding": [...]}]
-                for idx, item in enumerate(raw_embeddings):
+                batch_embeddings: List[List[float]] = []
+                for item in raw_embeddings:
                     if isinstance(item, list):
                         emb = [float(val) for val in item]
                     elif isinstance(item, dict) and "embedding" in item:
@@ -271,7 +334,21 @@ class CloudflareEmbeddings(BaseEmbeddingProvider):
                         raise ValueError(
                             f"Expected {EMBEDDING_DIM}d vector from Cloudflare '{self.model}', got {len(emb)}d"
                         )
-                    all_embeddings.append(emb)
+                    batch_embeddings.append(emb)
+
+                if len(batch_embeddings) != len(batch):
+                    raise RuntimeError(
+                        f"Batch {batch_idx} count mismatch: expected {len(batch)}, got {len(batch_embeddings)}"
+                    )
+                return batch_embeddings
+
+        # Run batches concurrently while strictly preserving order
+        batch_tasks = [_fetch_single_batch(idx, b) for idx, b in enumerate(batches)]
+        batch_results = await asyncio.gather(*batch_tasks)
+
+        all_embeddings: List[List[float]] = []
+        for sublist in batch_results:
+            all_embeddings.extend(sublist)
 
         if len(all_embeddings) != len(texts):
             raise RuntimeError(
@@ -287,7 +364,10 @@ class CloudflareEmbeddings(BaseEmbeddingProvider):
                 f"Cloudflare Workers AI embedding provider initialized with model '{self.model}' (768d)."
             )
             return True
-        logger.warning("Cloudflare Workers AI missing credentials.")
+        logger.warning(
+            "Cloudflare Workers AI missing credentials: CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN "
+            "must be configured in environment for production embeddings."
+        )
         return False
 
 
@@ -300,12 +380,23 @@ class EmbeddingClientProxy:
     def _resolve_provider(self) -> BaseEmbeddingProvider:
         provider_name = (settings.embedding_provider or "ollama").lower().strip()
 
+        # Explicit Cloudflare provider
         if provider_name == "cloudflare":
             if "cloudflare" not in self._provider_cache:
                 self._provider_cache["cloudflare"] = CloudflareEmbeddings()
             return self._provider_cache["cloudflare"]
 
-        # Default is Ollama (Local Development)
+        # If running in production (Render or APP_ENV=production) and Cloudflare credentials are configured,
+        # automatically route to Cloudflare to guarantee independent cloud embeddings.
+        is_production = settings.app_env.lower() in ("production", "prod") or bool(os.getenv("RENDER"))
+        has_cf_creds = bool(settings.cloudflare_account_id and settings.cloudflare_api_token)
+
+        if is_production and has_cf_creds:
+            if "cloudflare" not in self._provider_cache:
+                self._provider_cache["cloudflare"] = CloudflareEmbeddings()
+            return self._provider_cache["cloudflare"]
+
+        # Default is Ollama (Local Development: nomic-embed-text, 768d) - 100% strictly preserved
         if "ollama" not in self._provider_cache:
             self._provider_cache["ollama"] = OllamaEmbeddings()
         return self._provider_cache["ollama"]

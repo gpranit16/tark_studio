@@ -95,9 +95,9 @@ async def ingest_document_file(
         # Delete any existing chunks for this document before adding new ones
         await session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == doc_id))
 
-        # Create chunk entities
-        for chunk_meta, emb in zip(chunks_data, embeddings):
-            c_entity = DocumentChunk(
+        # Create chunk entities and bulk insert
+        chunk_entities: List[DocumentChunk] = [
+            DocumentChunk(
                 id=uuid.uuid4(),
                 document_id=doc_id,
                 chunk_index=chunk_meta.chunk_index,
@@ -111,7 +111,9 @@ async def ingest_document_file(
                 embedding=emb,
                 created_at=datetime.now(timezone.utc),
             )
-            session.add(c_entity)
+            for chunk_meta, emb in zip(chunks_data, embeddings)
+        ]
+        session.add_all(chunk_entities)
 
         await session.commit()
         await session.refresh(doc)

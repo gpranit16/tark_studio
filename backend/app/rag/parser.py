@@ -197,6 +197,26 @@ def parse_pdf(file_path: str, filename: str) -> ParsedDocument:
         except Exception as exc:
             logger.warning(f"Failed to extract links on page {viewer_page}: {exc}")
 
+        # Also extract plain text visible URLs and markdown links from the body text
+        try:
+            visible_urls = _extract_visible_urls(text, viewer_page)
+            md_urls = _extract_markdown_links(text, viewer_page)
+            seen_uris_set = set()
+            merged_links: List[Dict[str, Any]] = []
+            for l in page_links:
+                norm_uri = l["uri"].lower().rstrip("/")
+                if norm_uri not in seen_uris_set:
+                    seen_uris_set.add(norm_uri)
+                    merged_links.append(l)
+            for l in visible_urls + md_urls:
+                norm_uri = l["uri"].lower().rstrip("/")
+                if norm_uri not in seen_uris_set:
+                    seen_uris_set.add(norm_uri)
+                    merged_links.append(l)
+            page_links = merged_links
+        except Exception as exc:
+            logger.warning(f"Failed to merge visible URLs on page {viewer_page}: {exc}")
+
         # Extract structured tables (PyMuPDF find_tables)
         page_tables: List[Dict[str, Any]] = []
         table_markdown_blocks: List[str] = []
@@ -247,16 +267,32 @@ def parse_pdf(file_path: str, filename: str) -> ParsedDocument:
 
         full_page_text = "\n\n".join(part for part in augmented_text_parts if part.strip()).replace("\x00", "").strip()
 
-        # Extract detected section headings (lines with larger font or prefix)
+        # Extract detected section headings (lines with larger font, prefix, or standalone section titles)
         heading = None
         blocks = page.get_text("blocks")
         for b in blocks:
             # block format: (x0, y0, x1, y1, text, block_no, block_type)
             if len(b) >= 5 and b[4].strip():
                 first_line = b[4].replace("\x00", "").strip().split("\n")[0].strip()
-                if any(first_line.startswith(p) for p in ("Chapter ", "CHAPTER ", "1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.")):
-                    heading = first_line[:120]
+                clean_line = first_line.strip()
+                if not clean_line or len(clean_line) > 100:
+                    continue
+                # 1. Check known prefixes
+                if any(clean_line.upper().startswith(p) for p in ("CHAPTER ", "SECTION ", "PART ", "APPENDIX ")):
+                    heading = clean_line[:120]
                     break
+                # 2. Check numbered headings (e.g. 1., 1.1, 2.3)
+                if re.match(r"^\d+(\.\d+)*\.?\s+[A-Za-z]", clean_line):
+                    heading = clean_line[:120]
+                    break
+                # 3. Check standalone title-case/uppercase headings
+                if (
+                    len(clean_line) <= 60
+                    and not clean_line.endswith((".", ",", ";", ":", "-", "?", "!"))
+                    and (clean_line.isupper() or clean_line.istitle())
+                    and heading is None
+                ):
+                    heading = clean_line[:120]
 
         # Extract embedded images metadata
         image_list = page.get_images(full=True)

@@ -1827,7 +1827,9 @@ export default function App() {
                                 Ready ({doc.page_count}p)
                               </span>
                             ) : (
-                              <span className="text-red-400">Error</span>
+                              <span className="text-red-400 font-mono" title={doc.error_message || 'Indexing failed'}>
+                                {doc.error_message ? `Failed: ${doc.error_message.slice(0, 24)}...` : 'Error'}
+                              </span>
                             )}
                             <span className="text-[#929B89]">
                               • {(doc.file_size_bytes / 1024 / 1024).toFixed(1)}MB
@@ -2076,8 +2078,11 @@ export default function App() {
                                 Indexing...
                               </span>
                             ) : (
-                              <span className="text-[10px] font-mono text-red-400 bg-red-950/40 border border-red-800/60 px-2 py-0.5 rounded">
-                                Error
+                              <span
+                                className="text-[10px] font-mono text-red-400 bg-red-950/40 border border-red-800/60 px-2 py-0.5 rounded cursor-help"
+                                title={doc.error_message || 'Indexing failed'}
+                              >
+                                {doc.error_message ? `Error: ${doc.error_message.slice(0, 20)}...` : 'Error'}
                               </span>
                             )}
 

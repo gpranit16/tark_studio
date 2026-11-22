@@ -25,7 +25,7 @@ from app.schemas.chat import (
 )
 from app.rag.parser import ALLOWED_EXTENSIONS, MAX_FILE_SIZE_BYTES
 from app.rag.engine import ingest_document_file
-from app.rag.embeddings import EMBEDDING_MODEL, EMBEDDING_DIM
+from app.rag.embeddings import embeddings_client, EMBEDDING_DIM
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ async def _run_background_ingestion(file_path: str, filename: str, doc_id: uuid.
     try:
         await ingest_document_file(file_path=file_path, filename=filename, document_id=doc_id)
     except Exception as exc:
-        logger.error(f"Background ingestion failed for {filename} ({doc_id}): {exc}")
+        logger.exception(f"Background ingestion failed for {filename} ({doc_id}): {exc}")
         async with async_session_factory() as session:
             stmt = select(Document).where(Document.id == doc_id)
             res = await session.execute(stmt)
@@ -95,7 +95,7 @@ async def upload_document(
             file_size_bytes=bytes_written,
             page_count=0,
             chunk_count=0,
-            embedding_model=EMBEDDING_MODEL,
+            embedding_model=embeddings_client.model_name,
             embedding_dimension=EMBEDDING_DIM,
             status="processing",
             metadata_json={"stored_path": saved_path},
