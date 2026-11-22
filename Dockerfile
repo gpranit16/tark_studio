@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Pre-cache the ONNX reranker model to ensure zero-latency startup and offline reliability
 RUN python -c "from huggingface_hub import hf_hub_download; \
-    hf_hub_download(repo_id='Xenova/ms-marco-MiniLM-L-6-v2', filename='onnx/model_int8.onnx'); \
+    hf_hub_download(repo_id='Xenova/ms-marco-MiniLM-L-6-v2', filename='onnx/model_quantized.onnx'); \
     hf_hub_download(repo_id='Xenova/ms-marco-MiniLM-L-6-v2', filename='tokenizer.json')"
 
 # Copy application source and database migration configurations
