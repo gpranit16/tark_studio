@@ -21,90 +21,129 @@ from app.rag.vision import vision_client
 logger = logging.getLogger(__name__)
 
 
-async def _resolve_scanned_pages_vision(file_path: str, parsed_doc: ParsedDocument) -> bool:
-    """Render scanned candidate pages to 96 DPI Grayscale JPEG and transcribe with bounded concurrency (max 2).
-    
-    Returns True if any candidate page failed to transcribe (leading to partial status).
-    """
+def _sync_ocr_single_page(file_path: str, page_idx: int) -> str:
+    """Run PyMuPDF C++ OCR on a single page off the main event loop in a worker thread."""
     import fitz
-
-    tasks = []
-    candidate_pages = []
     doc = None
-    sem = asyncio.Semaphore(2)
-
-    async def _bounded_transcribe(img_bytes: bytes):
-        async with sem:
-            return await vision_client.transcribe_image_bytes(img_bytes)
-
     try:
         doc = fitz.open(file_path)
-        for page in parsed_doc.pages:
-            if getattr(page, "needs_vision", False):
-                page_idx = page.viewer_page - 1
-                if 0 <= page_idx < len(doc):
-                    pdf_page = doc[page_idx]
+        if 0 <= page_idx < len(doc):
+            page = doc[page_idx]
 
-                    # 1. Ultra-fast PyMuPDF C++ in-memory OCR (sub-0.25s per page, zero network, zero 429)
-                    try:
-                        tp = pdf_page.get_textpage_ocr(language="eng", dpi=120, full=True)
-                        native_ocr_text = pdf_page.get_text(textpage=tp).strip()
-                        if len(native_ocr_text) >= 15:
-                            page.text = native_ocr_text
-                            page.provenance = "ocr_layer"
-                            page.needs_vision = False
-                            page.diagnostics = f"Page {page.viewer_page}: Local C++ OCR transcribed ({len(native_ocr_text)} chars)."
-                            logger.info(f"Page {page.viewer_page} transcribed via native PyMuPDF C++ OCR ({len(native_ocr_text)} chars).")
-                            continue
-                    except Exception:
-                        pass
+            # 1. Fast image-level OCR at 96 DPI (extracts and OCRs embedded scanned raster images directly)
+            try:
+                tp = page.get_textpage_ocr(language="eng", dpi=96, full=False)
+                ocr_text = page.get_text(textpage=tp).strip()
+                if len(ocr_text) >= 20:
+                    return ocr_text
+            except Exception:
+                pass
 
-                    # 2. Render 96 DPI Grayscale: 50% smaller payload (~110KB), high OCR contrast
-                    pix = pdf_page.get_pixmap(dpi=96, colorspace=fitz.csGRAY)
-
-                    # Instant blank/uniform page skip (sub-1ms)
-                    samples = memoryview(pix.samples)
-                    if min(samples) > 240:
-                        page.text = ""
-                        page.provenance = "native_digital"
-                        page.needs_vision = False
-                        page.diagnostics = f"Page {page.viewer_page}: Blank unprinted page."
-                        continue
-
-                    # 3. Queue for vision client fallback (Cloudflare Workers AI)
-                    jpeg_bytes = pix.tobytes(output="jpeg", jpg_quality=75)
-                    tasks.append(_bounded_transcribe(jpeg_bytes))
-                    candidate_pages.append(page)
+            # 2. Full-page raster OCR at 96 DPI fallback
+            try:
+                tp = page.get_textpage_ocr(language="eng", dpi=96, full=True)
+                ocr_text = page.get_text(textpage=tp).strip()
+                if len(ocr_text) >= 15:
+                    return ocr_text
+            except Exception:
+                pass
     except Exception as exc:
-        logger.warning(f"Failed to open document for vision snapshot: {exc}")
-        return True
+        logger.debug(f"PyMuPDF OCR worker error on page {page_idx + 1}: {exc}")
     finally:
         if doc is not None:
             doc.close()
+    return ""
 
-    if not tasks:
+
+def _sync_render_grayscale_jpeg(file_path: str, page_idx: int) -> Optional[bytes]:
+    """Render a 96 DPI grayscale JPEG for secondary vision fallback, checking for blank pages."""
+    import fitz
+    doc = None
+    try:
+        doc = fitz.open(file_path)
+        if 0 <= page_idx < len(doc):
+            page = doc[page_idx]
+            pix = page.get_pixmap(dpi=96, colorspace=fitz.csGRAY)
+            samples = memoryview(pix.samples)
+            if min(samples) > 240:
+                # Blank / uniform unprinted page
+                return None
+            return pix.tobytes(output="jpeg", jpg_quality=75)
+    except Exception as exc:
+        logger.warning(f"Failed to render page pixmap on page {page_idx + 1}: {exc}")
+        return None
+    finally:
+        if doc is not None:
+            doc.close()
+    return None
+
+
+async def _resolve_scanned_pages_vision(file_path: str, parsed_doc: ParsedDocument) -> bool:
+    """Transcribe scanned candidate pages concurrently using bounded worker threads and Vision fallback.
+    
+    1. Primary: Local PyMuPDF C++ OCR offloaded to background threads (asyncio.to_thread).
+    2. Instant skip: Blank/uniform pages detected in <1ms.
+    3. Secondary: Cloudflare Workers AI Llama-3.2 Vision fallback bounded by concurrency semaphore.
+    """
+    candidate_pages = [p for p in parsed_doc.pages if getattr(p, "needs_vision", False)]
+    if not candidate_pages:
         return False
 
-    # Execute concurrent vision inference strictly bounded to 2 workers to avoid Cloudflare 429 cascades
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    sem = asyncio.Semaphore(2)
     any_failures = False
 
-    for page, res in zip(candidate_pages, results):
-        if isinstance(res, str) and res.strip():
-            page.text = res.strip()
-            page.provenance = "vision_transcription"
-            page.needs_vision = False
-            page.diagnostics = f"Page {page.viewer_page}: Transcribed via Vision OCR ({len(res)} chars)."
-            logger.info(f"Page {page.viewer_page} successfully transcribed via Vision OCR ({len(res)} chars).")
-        else:
-            any_failures = True
-            page.provenance = "scanned_untranscribed"
-            page.needs_vision = False
-            err_detail = str(res) if isinstance(res, Exception) else "Vision OCR timed out or empty"
-            warning_msg = f"Page {page.viewer_page}: Vision transcription unavailable ({err_detail})."
-            parsed_doc.warnings.append(warning_msg)
-            page.text = f"[Scanned Page {page.viewer_page}: Visual reference only]"
+    async def _process_page(page):
+        nonlocal any_failures
+        page_idx = page.viewer_page - 1
 
+        # Step 1: Ultra-fast Local In-Container OCR in worker thread (non-blocking)
+        try:
+            local_text = await asyncio.to_thread(_sync_ocr_single_page, file_path, page_idx)
+            if local_text and len(local_text) >= 15:
+                page.text = local_text
+                page.provenance = "ocr_layer"
+                page.needs_vision = False
+                page.diagnostics = f"Page {page.viewer_page}: Local C++ OCR transcribed ({len(local_text)} chars)."
+                logger.info(f"Page {page.viewer_page} transcribed via local C++ OCR ({len(local_text)} chars).")
+                return
+        except Exception as exc:
+            logger.warning(f"Local OCR failed on page {page.viewer_page}: {exc}")
+
+        # Step 2: Render 96 DPI grayscale JPEG in worker thread
+        jpeg_bytes = await asyncio.to_thread(_sync_render_grayscale_jpeg, file_path, page_idx)
+        if not jpeg_bytes:
+            # Blank or uniform page
+            page.text = ""
+            page.provenance = "native_digital"
+            page.needs_vision = False
+            page.diagnostics = f"Page {page.viewer_page}: Blank unprinted page."
+            return
+
+        # Step 3: Secondary fallback to Cloudflare Workers AI Vision
+        if vision_client.account_id and vision_client.api_token:
+            async with sem:
+                try:
+                    cf_text = await vision_client.transcribe_image_bytes(jpeg_bytes)
+                    if cf_text and cf_text.strip():
+                        page.text = cf_text.strip()
+                        page.provenance = "vision_transcription"
+                        page.needs_vision = False
+                        page.diagnostics = f"Page {page.viewer_page}: Transcribed via Vision OCR ({len(cf_text)} chars)."
+                        logger.info(f"Page {page.viewer_page} transcribed via Cloudflare Vision ({len(cf_text)} chars).")
+                        return
+                except Exception as exc:
+                    logger.warning(f"Vision transcription failed for page {page.viewer_page}: {exc}")
+
+        # Step 4: Graceful fallback without crashing
+        any_failures = True
+        page.provenance = "scanned_untranscribed"
+        page.needs_vision = False
+        warning_msg = f"Page {page.viewer_page}: Vision transcription unavailable."
+        parsed_doc.warnings.append(warning_msg)
+        page.text = f"[Scanned Page {page.viewer_page}: Visual reference only]"
+
+    # Run candidate pages concurrently with bounded semaphore off the main event loop
+    await asyncio.gather(*[_process_page(p) for p in candidate_pages], return_exceptions=True)
     return any_failures
 
 
@@ -126,29 +165,14 @@ async def ingest_document_file(
     parsed_doc = parse_document(file_path, filename=target_filename)
     parse_sec = round(time.perf_counter() - t0, 2)
 
-    # 1b. Asynchronously resolve true scanned pages via Vision OCR
+    # 1b. Asynchronously resolve true scanned pages via ultra-fast local OCR & Vision pipeline
     has_partial_failures = False
     vision_candidates = [p for p in parsed_doc.pages if getattr(p, "needs_vision", False)]
     if vision_candidates:
-        if vision_client.is_configured:
-            logger.info(f"Resolving {len(vision_candidates)} scanned candidate pages via Vision OCR...")
-            t_vis = time.perf_counter()
-            has_partial_failures = await _resolve_scanned_pages_vision(file_path, parsed_doc)
-            logger.info(f"Vision OCR pass finished in {round(time.perf_counter() - t_vis, 2)}s.")
-        else:
-            logger.info(
-                f"{len(vision_candidates)} scanned candidate pages flagged, but no Vision OCR provider is configured in environment."
-            )
-            has_partial_failures = True
-            for p in vision_candidates:
-                p.provenance = "scanned_untranscribed"
-                p.needs_vision = False
-                warning_msg = (
-                    f"Page {p.viewer_page}: Scanned page pending OCR transcription "
-                    "(configure GEMINI_API_KEY or CLOUDFLARE_API_TOKEN in environment)."
-                )
-                parsed_doc.warnings.append(warning_msg)
-                p.text = f"[Scanned Page {p.viewer_page}: Visual reference only (OCR provider not configured)]"
+        logger.info(f"Resolving {len(vision_candidates)} scanned candidate pages via fast OCR & Vision pipeline...")
+        t_vis = time.perf_counter()
+        has_partial_failures = await _resolve_scanned_pages_vision(file_path, parsed_doc)
+        logger.info(f"Vision & OCR pass finished in {round(time.perf_counter() - t_vis, 2)}s.")
 
     # 2. Chunk document
     t0 = time.perf_counter()

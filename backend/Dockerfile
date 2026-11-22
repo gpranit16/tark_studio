@@ -17,9 +17,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     tesseract-ocr \
     tesseract-ocr-eng \
+    libtesseract-dev \
     && rm -rf /var/lib/apt/lists/*
 
-ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
+ENV OMP_THREAD_LIMIT=1 \
+    TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 
 # Install Python production dependencies
 COPY backend/requirements.txt /app/requirements.txt
