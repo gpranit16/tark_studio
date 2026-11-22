@@ -1,6 +1,6 @@
 # ==============================================================================
 # TARK Studio — Production Multi-Arch Dockerfile
-# Supported Architectures: linux/amd64, linux/arm64 (Oracle Ampere A1)
+# Supported Architectures: linux/amd64, linux/arm64
 # ==============================================================================
 
 FROM python:3.12-slim-bookworm AS base
@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python production dependencies
-COPY requirements.txt /app/
+COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
@@ -29,18 +29,15 @@ RUN python -c "from huggingface_hub import hf_hub_download; \
     hf_hub_download(repo_id='Xenova/ms-marco-MiniLM-L-6-v2', filename='tokenizer.json')"
 
 # Copy application source and database migration configurations
-COPY app /app/app
-COPY alembic /app/alembic
-COPY alembic.ini /app/alembic.ini
-COPY run.py /app/run.py
-COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY backend/app /app/app
+COPY backend/alembic /app/alembic
+COPY backend/alembic.ini /app/alembic.ini
+COPY backend/run.py /app/run.py
+COPY backend/docker-entrypoint.sh /app/docker-entrypoint.sh
 
 # Ensure uploads directory exists and entrypoint is executable
 RUN mkdir -p /app/uploads && chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 8000
-
-HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:8000/api/v1/health || exit 1
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
