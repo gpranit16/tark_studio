@@ -44,7 +44,22 @@ async def _resolve_scanned_pages_vision(file_path: str, parsed_doc: ParsedDocume
                 page_idx = page.viewer_page - 1
                 if 0 <= page_idx < len(doc):
                     pdf_page = doc[page_idx]
-                    # Render 96 DPI Grayscale: 50% smaller payload (~110KB), high OCR contrast, sub-50ms serialization
+
+                    # 1. Ultra-fast PyMuPDF C++ in-memory OCR (sub-0.25s per page, zero network, zero 429)
+                    try:
+                        tp = pdf_page.get_textpage_ocr(language="eng", dpi=120, full=True)
+                        native_ocr_text = pdf_page.get_text(textpage=tp).strip()
+                        if len(native_ocr_text) >= 15:
+                            page.text = native_ocr_text
+                            page.provenance = "ocr_layer"
+                            page.needs_vision = False
+                            page.diagnostics = f"Page {page.viewer_page}: Local C++ OCR transcribed ({len(native_ocr_text)} chars)."
+                            logger.info(f"Page {page.viewer_page} transcribed via native PyMuPDF C++ OCR ({len(native_ocr_text)} chars).")
+                            continue
+                    except Exception:
+                        pass
+
+                    # 2. Render 96 DPI Grayscale: 50% smaller payload (~110KB), high OCR contrast
                     pix = pdf_page.get_pixmap(dpi=96, colorspace=fitz.csGRAY)
 
                     # Instant blank/uniform page skip (sub-1ms)
@@ -56,6 +71,7 @@ async def _resolve_scanned_pages_vision(file_path: str, parsed_doc: ParsedDocume
                         page.diagnostics = f"Page {page.viewer_page}: Blank unprinted page."
                         continue
 
+                    # 3. Queue for vision client fallback (Cloudflare Workers AI)
                     jpeg_bytes = pix.tobytes(output="jpeg", jpg_quality=75)
                     tasks.append(_bounded_transcribe(jpeg_bytes))
                     candidate_pages.append(page)

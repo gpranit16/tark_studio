@@ -12,11 +12,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install minimal OS dependencies for network healthchecks and OCR
+# Install minimal OS dependencies for network healthchecks and ultra-fast in-container OCR
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     tesseract-ocr \
+    tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
+
+ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 
 # Install Python production dependencies
 COPY backend/requirements.txt /app/requirements.txt
