@@ -52,16 +52,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         import logging
         logging.getLogger("app.startup").warning(f"Checkpointer warmup deferred: {exc}")
 
-    # Startup: Ensure Ollama nomic-embed-text is available
+    # Startup: Ensure embedding provider model is available
     try:
         from app.rag.embeddings import embeddings_client
         import logging
         log = logging.getLogger("app.startup")
-        log.info("Verifying Ollama embedding model availability...")
+        log.info(f"Verifying embedding model availability ({embeddings_client.model_name})...")
         asyncio.create_task(embeddings_client.ensure_model_available())
     except Exception as exc:
         import logging
-        logging.getLogger("app.startup").warning(f"Ollama model check deferred: {exc}")
+        logging.getLogger("app.startup").warning(f"Embedding model check deferred: {exc}")
 
     yield
     # Shutdown: gracefully await pending background rolling summaries, then dispose of checkpointer & DB

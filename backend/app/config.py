@@ -36,6 +36,17 @@ class Settings(BaseSettings):
     groq_api_key: Optional[str] = Field(default=None, alias="GROQ_API_KEY")
     gemini_api_key: Optional[str] = Field(default=None, alias="GEMINI_API_KEY")
 
+    # Embedding Provider settings (ollama [local], cloudflare [production])
+    embedding_provider: str = Field(default="ollama", alias="EMBEDDING_PROVIDER")
+    embedding_model: str = Field(default="nomic-embed-text", alias="EMBEDDING_MODEL")
+
+    # Cloudflare Workers AI settings (for independent cloud production embeddings)
+    cloudflare_account_id: Optional[str] = Field(default=None, alias="CLOUDFLARE_ACCOUNT_ID")
+    cloudflare_api_token: Optional[str] = Field(default=None, alias="CLOUDFLARE_API_TOKEN")
+    cloudflare_embedding_model: str = Field(
+        default="@cf/google/embeddinggemma-2", alias="CLOUDFLARE_EMBEDDING_MODEL"
+    )
+
     # Reranker settings (baseline, onnx)
     reranker_type: str = Field(default="baseline", alias="RERANKER_TYPE")
     reranker_model_onnx: str = Field(default="Xenova/ms-marco-MiniLM-L-6-v2", alias="RERANKER_MODEL_ONNX")
