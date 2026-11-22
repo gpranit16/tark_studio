@@ -323,7 +323,8 @@ export default function App() {
       });
       if (res.ok) {
         const uploadedDoc = await res.json();
-        // Immediately attach this document to active chat grounding
+        // Immediately register in documents list and attach to active chat grounding
+        setDocuments((prev) => [uploadedDoc, ...prev.filter((d) => d.id !== uploadedDoc.id)]);
         setSelectedDocIds((prev) => [...prev.filter((id) => id !== uploadedDoc.id), uploadedDoc.id]);
         await fetchDocuments();
       } else {

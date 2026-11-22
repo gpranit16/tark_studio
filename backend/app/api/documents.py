@@ -10,6 +10,7 @@ Provides endpoints to:
 import os
 import uuid
 import shutil
+import asyncio
 import logging
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -106,8 +107,8 @@ async def upload_document(
         await session.commit()
         await session.refresh(doc)
 
-    # Kick off ingestion task
-    background_tasks.add_task(_run_background_ingestion, saved_path, filename, doc_id)
+    # Kick off asynchronous background ingestion without blocking the HTTP response
+    asyncio.create_task(_run_background_ingestion(saved_path, filename, doc_id))
 
     return DocumentResponse.model_validate(doc)
 
@@ -119,6 +120,20 @@ async def list_documents():
         stmt = select(Document).order_by(desc(Document.created_at))
         result = await session.execute(stmt)
         docs = result.scalars().all()
+
+        # Check and fail any stale processing documents older than 5 minutes
+        now = datetime.now(timezone.utc)
+        has_stale = False
+        for d in docs:
+            if d.status == "processing" and (now - d.created_at).total_seconds() > 300:
+                d.status = "failed"
+                d.error_message = "Ingestion timed out (process was interrupted)"
+                d.updated_at = now
+                has_stale = True
+
+        if has_stale:
+            await session.commit()
+
         return [DocumentResponse.model_validate(d) for d in docs]
 
 
