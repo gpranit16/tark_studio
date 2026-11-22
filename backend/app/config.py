@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     cloudflare_embedding_model: str = Field(
         default="@cf/baai/bge-base-en-v1.5", alias="CLOUDFLARE_EMBEDDING_MODEL"
     )
+    cloudflare_vision_model: str = Field(
+        default="@cf/meta/llama-3.2-11b-vision-instruct", alias="CLOUDFLARE_VISION_MODEL"
+    )
+    enable_vision_ocr: bool = Field(default=True, alias="ENABLE_VISION_OCR")
 
     # Reranker settings (baseline, onnx)
     reranker_type: str = Field(default="baseline", alias="RERANKER_TYPE")

@@ -1,6 +1,7 @@
 """Integration tests for Stop Generation / client cancellation behavior."""
 
 import uuid
+import asyncio
 import pytest
 from unittest.mock import patch
 from httpx import AsyncClient

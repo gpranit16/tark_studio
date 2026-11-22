@@ -89,6 +89,8 @@ class ExtractedPage:
     links: List[Dict[str, Any]] = field(default_factory=list)
     tables: List[Dict[str, Any]] = field(default_factory=list)
     diagnostics: Optional[str] = None
+    provenance: str = "native_digital"     # "native_digital", "ocr_layer", "vision_transcription", "scanned_candidate", "scanned_untranscribed"
+    needs_vision: bool = False             # Flag indicating candidate for background Vision OCR
 
 
 @dataclass
@@ -285,21 +287,45 @@ def parse_pdf(file_path: str, filename: str) -> ParsedDocument:
                 "book_page": book_page,
             })
 
-        # Handle empty or scanned pages
+        # Handle empty, dual-layer OCR, or scanned pages without xref overhead
+        provenance = "native_digital"
+        needs_vision = False
         diagnostics = None
+
         if len(full_page_text) < 15:
-            if has_image:
-                if not ocr_available:
-                    diagnostics = (
-                        f"Page {viewer_page} (Book p. {book_page}) contains {len(image_list)} embedded image(s) "
-                        "with minimal text. OCR is unavailable (Tesseract not installed)."
-                    )
-                    warnings.append(diagnostics)
-                    full_page_text = f"[Image/Diagram on Page {viewer_page} (Book p. {book_page}): {len(image_list)} figure(s)]"
+            # Candidate suspicious / scanned page: check rendered images using xrefs=False (no hashing overhead)
+            raw_imgs = page.get_image_info(xrefs=False)
+            has_rendered_image = len(raw_imgs) > 0 or has_image
+
+            if has_rendered_image:
+                # Check if page has an invisible OCR layer (render_mode == 3 in PDF spec)
+                has_invisible_ocr = False
+                try:
+                    text_dict = page.get_text("dict", flags=fitz.TEXT_DEHYPHENATE)
+                    for block in text_dict.get("blocks", []):
+                        if block.get("type") == 0:
+                            for line in block.get("lines", []):
+                                for span in line.get("spans", []):
+                                    span_text = span.get("text", "").strip()
+                                    if span.get("flags", 0) & 1 and len(span_text) >= 15:
+                                        has_invisible_ocr = True
+                                        break
+                except Exception:
+                    pass
+
+                if has_invisible_ocr:
+                    provenance = "ocr_layer"
+                    diagnostics = f"Page {viewer_page}: Verified invisible OCR text layer ({len(full_page_text)} chars)."
                 else:
-                    diagnostics = f"Page {viewer_page} has low text; OCR triggered."
+                    # True scanned candidate: flag for background Cloudflare Vision OCR
+                    needs_vision = True
+                    provenance = "scanned_candidate"
+                    diagnostics = f"Page {viewer_page}: Scanned document page with {len(raw_imgs)} image(s) flagged for Vision OCR."
+                    warnings.append(diagnostics)
+                    if not full_page_text:
+                        full_page_text = f"[Scanned Page {viewer_page}: Text extraction pending]"
             else:
-                diagnostics = f"Page {viewer_page} has minimal or blank content."
+                diagnostics = f"Page {viewer_page}: Minimal or blank content."
                 warnings.append(diagnostics)
 
         extracted_pages.append(
@@ -313,6 +339,8 @@ def parse_pdf(file_path: str, filename: str) -> ParsedDocument:
                 links=page_links,
                 tables=page_tables,
                 diagnostics=diagnostics,
+                provenance=provenance,
+                needs_vision=needs_vision,
             )
         )
 

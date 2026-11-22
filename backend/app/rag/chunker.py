@@ -60,6 +60,7 @@ class DocumentChunkData:
     image_references: List[Dict[str, Any]]
     links: List[Dict[str, Any]] = field(default_factory=list)
     tables: List[Dict[str, Any]] = field(default_factory=list)
+    provenance: str = "native_digital"
 
 
 class TokenChunker:
@@ -104,6 +105,7 @@ class TokenChunker:
                         image_references=page.image_references,
                         links=getattr(page, "links", []),
                         tables=getattr(page, "tables", []),
+                        provenance=getattr(page, "provenance", "native_digital"),
                     )
                 )
                 global_chunk_idx += 1
@@ -131,6 +133,7 @@ class TokenChunker:
                             image_references=page.image_references if start == 0 else [],
                             links=getattr(page, "links", []),
                             tables=getattr(page, "tables", []),
+                            provenance=getattr(page, "provenance", "native_digital"),
                         )
                     )
                     global_chunk_idx += 1
