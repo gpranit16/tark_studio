@@ -225,3 +225,35 @@ Response:
 - [x] **CORS Resolution**: Cloudflare Pages origin allowed by backend CORS configuration.
 - [x] **ARM64 Native Execution**: Tested on Ubuntu aarch64 with native wheels (ONNX Runtime, asyncpg, PyMuPDF).
 - [x] **Persistent Storage**: Named volumes preserve PostgreSQL data, uploaded PDFs, Ollama embeddings, and Caddy TLS certificates across container restarts and VM reboots.
+
+---
+
+## 8. Cloud-Native Production Deployment (Render + Neon + Cloudflare Workers AI)
+
+For fully autonomous cloud deployments (zero dependence on a local PC, local Ollama, or personal machine):
+
+### Architecture
+- **Frontend**: Cloudflare Pages (`https://tark-studio.pages.dev`)
+- **Backend**: Render Web Service (Docker runtime)
+- **Database**: Neon Serverless PostgreSQL 16+ with `pgvector`
+- **Embeddings**: Cloudflare Workers AI (`@cf/google/embeddinggemma-2`, 768 dimensions)
+- **Reranker**: Xenova INT8 Cross-Encoder (`Xenova/ms-marco-MiniLM-L-6-v2`)
+- **LLM**: Groq API (`llama-3.3-70b-versatile`)
+
+### Render Environment Variables
+```env
+APP_ENV=production
+DATABASE_URL=postgresql://neondb_owner:npg_eCd8XkZUMG5j@ep-cold-river-becd7pf3-pooler.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+GROQ_API_KEY=gsk_...
+DEFAULT_PROVIDER=groq
+DEFAULT_MODEL=llama-3.3-70b-versatile
+CORS_ORIGINS=https://tark-studio.pages.dev,http://localhost:5173,http://localhost:3000
+HOST=0.0.0.0
+APP_PORT=10000
+
+# Cloudflare Workers AI Embeddings (Independent Cloud Pipeline)
+EMBEDDING_PROVIDER=cloudflare
+CLOUDFLARE_ACCOUNT_ID=your_cloudflare_account_id
+CLOUDFLARE_API_TOKEN=your_cloudflare_api_token
+CLOUDFLARE_EMBEDDING_MODEL=@cf/google/embeddinggemma-2
+```
