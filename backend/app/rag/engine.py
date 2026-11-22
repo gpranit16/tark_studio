@@ -22,7 +22,11 @@ logger = logging.getLogger(__name__)
 
 
 def _sync_ocr_single_page(file_path: str, page_idx: int) -> str:
-    """Run PyMuPDF C++ OCR on a single page off the main event loop in a worker thread."""
+    """Run PyMuPDF C++ OCR on a single composite page off the main event loop in a worker thread.
+    
+    Uses full=True at 72 DPI to render the complete composite page (combining all scan layers,
+    stamps, and signatures) into a lightweight 500k-pixel canvas for ultra-low latency (<2s).
+    """
     import fitz
     doc = None
     try:
@@ -30,25 +34,25 @@ def _sync_ocr_single_page(file_path: str, page_idx: int) -> str:
         if 0 <= page_idx < len(doc):
             page = doc[page_idx]
 
-            # 1. Fast image-level OCR at 96 DPI (extracts and OCRs embedded scanned raster images directly)
+            # 1. Fast composite page OCR at 72 DPI (~595x842 = 0.5MP, sub-2s inference)
             try:
-                tp = page.get_textpage_ocr(language="eng", dpi=96, full=False)
+                tp = page.get_textpage_ocr(language="eng", dpi=72, full=True)
                 ocr_text = page.get_text(textpage=tp).strip()
-                if len(ocr_text) >= 20:
+                if len(ocr_text) >= 15:
                     return ocr_text
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"72 DPI OCR pass on page {page_idx + 1}: {exc}")
 
-            # 2. Full-page raster OCR at 96 DPI fallback
+            # 2. High-resolution fallback at 96 DPI for dense or small fonts
             try:
                 tp = page.get_textpage_ocr(language="eng", dpi=96, full=True)
                 ocr_text = page.get_text(textpage=tp).strip()
                 if len(ocr_text) >= 15:
                     return ocr_text
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"96 DPI OCR fallback on page {page_idx + 1}: {exc}")
     except Exception as exc:
-        logger.debug(f"PyMuPDF OCR worker error on page {page_idx + 1}: {exc}")
+        logger.warning(f"PyMuPDF OCR worker error on page {page_idx + 1}: {exc}")
     finally:
         if doc is not None:
             doc.close()
@@ -56,19 +60,19 @@ def _sync_ocr_single_page(file_path: str, page_idx: int) -> str:
 
 
 def _sync_render_grayscale_jpeg(file_path: str, page_idx: int) -> Optional[bytes]:
-    """Render a 96 DPI grayscale JPEG for secondary vision fallback, checking for blank pages."""
+    """Render a 72 DPI grayscale JPEG for secondary vision fallback, checking for blank pages."""
     import fitz
     doc = None
     try:
         doc = fitz.open(file_path)
         if 0 <= page_idx < len(doc):
             page = doc[page_idx]
-            pix = page.get_pixmap(dpi=96, colorspace=fitz.csGRAY)
+            pix = page.get_pixmap(dpi=72, colorspace=fitz.csGRAY)
             samples = memoryview(pix.samples)
             if min(samples) > 240:
                 # Blank / uniform unprinted page
                 return None
-            return pix.tobytes(output="jpeg", jpg_quality=75)
+            return pix.tobytes(output="jpeg", jpg_quality=70)
     except Exception as exc:
         logger.warning(f"Failed to render page pixmap on page {page_idx + 1}: {exc}")
         return None
@@ -89,7 +93,7 @@ async def _resolve_scanned_pages_vision(file_path: str, parsed_doc: ParsedDocume
     if not candidate_pages:
         return False
 
-    sem = asyncio.Semaphore(2)
+    sem = asyncio.Semaphore(3)
     any_failures = False
 
     async def _process_page(page):

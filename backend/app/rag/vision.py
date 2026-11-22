@@ -50,8 +50,8 @@ class CloudflareVisionClient:
         self.model_name = getattr(
             settings, "cloudflare_vision_model", CLOUDFLARE_DEFAULT_VISION_MODEL
         )
-        self.timeout_sec = 10.0
-        self.max_retries = 1
+        self.timeout_sec = 8.0
+        self.max_retries = 0
 
     @property
     def is_configured(self) -> bool:
