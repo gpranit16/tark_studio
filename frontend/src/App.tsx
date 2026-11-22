@@ -1826,6 +1826,14 @@ export default function App() {
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                                 Ready ({doc.page_count}p)
                               </span>
+                            ) : doc.status === 'partial' ? (
+                              <span
+                                className="flex items-center gap-1 text-amber-400 font-medium"
+                                title="Partially indexed (some visual pages pending OCR credentials)"
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                Ready (Partial)
+                              </span>
                             ) : (
                               <span className="text-red-400 font-mono" title={doc.error_message || 'Indexing failed'}>
                                 {doc.error_message ? `Failed: ${doc.error_message.slice(0, 24)}...` : 'Error'}
@@ -2074,6 +2082,13 @@ export default function App() {
                             {doc.status === 'completed' ? (
                               <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 px-2 py-0.5 rounded">
                                 Ready
+                              </span>
+                            ) : doc.status === 'partial' ? (
+                              <span
+                                className="text-[10px] font-mono text-amber-400 bg-amber-950/40 border border-amber-800/60 px-2 py-0.5 rounded cursor-help"
+                                title="Partially indexed (some visual pages pending OCR credentials)"
+                              >
+                                Ready (Partial)
                               </span>
                             ) : doc.status === 'processing' ? (
                               <span className="text-[10px] font-mono text-ember-copper bg-amber-950/40 border border-amber-800/60 px-2 py-0.5 rounded animate-pulse">

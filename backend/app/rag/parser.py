@@ -292,24 +292,17 @@ def parse_pdf(file_path: str, filename: str) -> ParsedDocument:
         needs_vision = False
         diagnostics = None
 
-        if len(full_page_text) < 15:
+        if len(full_page_text) < 25:
             # Candidate suspicious / scanned page: check rendered images using xrefs=False (no hashing overhead)
             raw_imgs = page.get_image_info(xrefs=False)
             has_rendered_image = len(raw_imgs) > 0 or has_image
 
             if has_rendered_image:
-                # Check if page has an invisible OCR layer (render_mode == 3 in PDF spec)
+                # Check if page has an invisible OCR layer (type == 3 in PDF spec texttrace)
                 has_invisible_ocr = False
                 try:
-                    text_dict = page.get_text("dict", flags=fitz.TEXT_DEHYPHENATE)
-                    for block in text_dict.get("blocks", []):
-                        if block.get("type") == 0:
-                            for line in block.get("lines", []):
-                                for span in line.get("spans", []):
-                                    span_text = span.get("text", "").strip()
-                                    if span.get("flags", 0) & 1 and len(span_text) >= 15:
-                                        has_invisible_ocr = True
-                                        break
+                    traces = page.get_texttrace()
+                    has_invisible_ocr = any(t.get("type") == 3 for t in traces)
                 except Exception:
                     pass
 
@@ -317,7 +310,7 @@ def parse_pdf(file_path: str, filename: str) -> ParsedDocument:
                     provenance = "ocr_layer"
                     diagnostics = f"Page {viewer_page}: Verified invisible OCR text layer ({len(full_page_text)} chars)."
                 else:
-                    # True scanned candidate: flag for background Cloudflare Vision OCR
+                    # True scanned candidate: flag for background Vision OCR
                     needs_vision = True
                     provenance = "scanned_candidate"
                     diagnostics = f"Page {viewer_page}: Scanned document page with {len(raw_imgs)} image(s) flagged for Vision OCR."
@@ -327,6 +320,14 @@ def parse_pdf(file_path: str, filename: str) -> ParsedDocument:
             else:
                 diagnostics = f"Page {viewer_page}: Minimal or blank content."
                 warnings.append(diagnostics)
+        else:
+            # Check if text came from an invisible OCR layer
+            try:
+                traces = page.get_texttrace()
+                if any(t.get("type") == 3 for t in traces):
+                    provenance = "ocr_layer"
+            except Exception:
+                pass
 
         extracted_pages.append(
             ExtractedPage(

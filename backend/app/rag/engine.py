@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _resolve_scanned_pages_vision(file_path: str, parsed_doc: ParsedDocument) -> bool:
-    """Render scanned candidate pages to 150 DPI JPEG and transcribe concurrently via Cloudflare Vision.
+    """Render scanned candidate pages to 120 DPI JPEG and transcribe concurrently via Vision OCR.
     
     Returns True if any candidate page failed to transcribe (leading to partial status).
     """
@@ -38,8 +38,9 @@ async def _resolve_scanned_pages_vision(file_path: str, parsed_doc: ParsedDocume
                 page_idx = page.viewer_page - 1
                 if 0 <= page_idx < len(doc):
                     pdf_page = doc[page_idx]
-                    pix = pdf_page.get_pixmap(dpi=150)
-                    jpeg_bytes = pix.tobytes(output="jpeg", jpg_quality=85)
+                    # Render at 120 DPI, JPEG quality 80: sharp text for Vision OCR, compact ~150-200KB payload
+                    pix = pdf_page.get_pixmap(dpi=120)
+                    jpeg_bytes = pix.tobytes(output="jpeg", jpg_quality=80)
                     tasks.append(vision_client.transcribe_image_bytes(jpeg_bytes))
                     candidate_pages.append(page)
     except Exception as exc:
@@ -61,8 +62,8 @@ async def _resolve_scanned_pages_vision(file_path: str, parsed_doc: ParsedDocume
             page.text = res.strip()
             page.provenance = "vision_transcription"
             page.needs_vision = False
-            page.diagnostics = f"Page {page.viewer_page}: Transcribed via Cloudflare Vision OCR ({len(res)} chars)."
-            logger.info(f"Page {page.viewer_page} successfully transcribed via Cloudflare Vision ({len(res)} chars).")
+            page.diagnostics = f"Page {page.viewer_page}: Transcribed via Vision OCR ({len(res)} chars)."
+            logger.info(f"Page {page.viewer_page} successfully transcribed via Vision OCR ({len(res)} chars).")
         else:
             any_failures = True
             page.provenance = "scanned_untranscribed"
@@ -93,14 +94,29 @@ async def ingest_document_file(
     parsed_doc = parse_document(file_path, filename=target_filename)
     parse_sec = round(time.perf_counter() - t0, 2)
 
-    # 1b. Asynchronously resolve true scanned pages via Cloudflare Workers AI Vision
+    # 1b. Asynchronously resolve true scanned pages via Vision OCR
     has_partial_failures = False
     vision_candidates = [p for p in parsed_doc.pages if getattr(p, "needs_vision", False)]
-    if vision_candidates and vision_client.is_configured:
-        logger.info(f"Resolving {len(vision_candidates)} scanned candidate pages via Cloudflare Vision OCR...")
-        t_vis = time.perf_counter()
-        has_partial_failures = await _resolve_scanned_pages_vision(file_path, parsed_doc)
-        logger.info(f"Cloudflare Vision OCR pass finished in {round(time.perf_counter() - t_vis, 2)}s.")
+    if vision_candidates:
+        if vision_client.is_configured:
+            logger.info(f"Resolving {len(vision_candidates)} scanned candidate pages via Vision OCR...")
+            t_vis = time.perf_counter()
+            has_partial_failures = await _resolve_scanned_pages_vision(file_path, parsed_doc)
+            logger.info(f"Vision OCR pass finished in {round(time.perf_counter() - t_vis, 2)}s.")
+        else:
+            logger.info(
+                f"{len(vision_candidates)} scanned candidate pages flagged, but no Vision OCR provider is configured in environment."
+            )
+            has_partial_failures = True
+            for p in vision_candidates:
+                p.provenance = "scanned_untranscribed"
+                p.needs_vision = False
+                warning_msg = (
+                    f"Page {p.viewer_page}: Scanned page pending OCR transcription "
+                    "(configure GEMINI_API_KEY or CLOUDFLARE_API_TOKEN in environment)."
+                )
+                parsed_doc.warnings.append(warning_msg)
+                p.text = f"[Scanned Page {p.viewer_page}: Visual reference only (OCR provider not configured)]"
 
     # 2. Chunk document
     t0 = time.perf_counter()
