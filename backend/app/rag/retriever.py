@@ -180,19 +180,27 @@ class HybridRetriever:
 
         search_query = (resolved_query or query).strip()
 
-        # 1. Generate query embedding
-        query_vector = await embeddings_client.get_embedding(search_query)
+        # 1. Generate query embedding (with graceful resilience if dense service is offline)
+        query_vector: Optional[List[float]] = None
+        try:
+            query_vector = await embeddings_client.get_embedding(search_query)
+        except Exception as emb_exc:
+            logger.warning(f"Dense vector embedding generation failed: {emb_exc}. Proceeding with sparse lexical FTS search.")
 
         # 2. Run vector search and full-text search in parallel
         fts_coros = [self._sparse_fts_search(query_text=search_query, document_ids=document_ids, top_k=40)]
         if resolved_query and resolved_query.strip() != query.strip():
             fts_coros.append(self._sparse_fts_search(query_text=query, document_ids=document_ids, top_k=20))
 
-        dense_coro = self._vector_search(query_vector=query_vector, document_ids=document_ids, top_k=40)
-
-        all_results = await asyncio.gather(dense_coro, *fts_coros)
-        dense_results = all_results[0]
-        sparse_results = all_results[1]
+        if query_vector:
+            dense_coro = self._vector_search(query_vector=query_vector, document_ids=document_ids, top_k=40)
+            all_results = await asyncio.gather(dense_coro, *fts_coros)
+            dense_results = all_results[0]
+            sparse_results = all_results[1]
+        else:
+            dense_results = []
+            all_results = await asyncio.gather(*fts_coros)
+            sparse_results = all_results[0]
         if len(all_results) > 2:
             seen_ids = set()
             combined_sparse = []

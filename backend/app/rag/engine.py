@@ -40,10 +40,16 @@ async def ingest_document_file(
     chunks_data = chunker.chunk_document(parsed_doc)
     logger.info(f"Created {len(chunks_data)} token chunks across {parsed_doc.page_count} pages.")
 
-    # 3. Generate embeddings in batches via Ollama
+    # 3. Generate embeddings in batches via Ollama (with resilient fallback for FTS)
     logger.info(f"Generating 768d vector embeddings using {EMBEDDING_MODEL}...")
     chunk_texts = [c.content for c in chunks_data]
-    embeddings = await embeddings_client.get_embeddings_batch(chunk_texts)
+    try:
+        embeddings = await embeddings_client.get_embeddings_batch(chunk_texts)
+    except Exception as emb_exc:
+        logger.warning(
+            f"Ollama embedding service unavailable ({emb_exc}). Storing chunks with placeholder vectors for sparse FTS indexing."
+        )
+        embeddings = [[0.0] * EMBEDDING_DIM for _ in chunks_data]
 
     if len(embeddings) != len(chunks_data):
         raise RuntimeError(f"Embedding count mismatch: expected {len(chunks_data)}, got {len(embeddings)}")
