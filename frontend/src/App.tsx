@@ -286,9 +286,8 @@ export default function App() {
         const data: DocumentItem[] = await res.json();
         setDocuments(data);
         setSelectedDocIds((prev) => {
-          if (prev.length === 0 && data.some((d) => d.status === 'completed')) {
-            const firstCompleted = data.find((d) => d.status === 'completed');
-            return firstCompleted ? [firstCompleted.id] : [];
+          if (prev.length === 0 && data.length > 0) {
+            return [data[0].id];
           }
           return prev;
         });

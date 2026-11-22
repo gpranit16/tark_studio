@@ -36,6 +36,18 @@ UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
+# Strong reference set to prevent Python garbage collection from terminating active ingestion tasks
+_active_ingestion_tasks: set[asyncio.Task] = set()
+
+
+def _launch_ingestion_task(file_path: str, filename: str, doc_id: uuid.UUID) -> asyncio.Task:
+    """Launch background ingestion coroutine and retain a strong reference until completion."""
+    task = asyncio.create_task(_run_background_ingestion(file_path, filename, doc_id))
+    _active_ingestion_tasks.add(task)
+    task.add_done_callback(_active_ingestion_tasks.discard)
+    return task
+
+
 async def _run_background_ingestion(file_path: str, filename: str, doc_id: uuid.UUID):
     """Run ingestion in background task, updating status and error on failure."""
     try:
@@ -107,8 +119,8 @@ async def upload_document(
         await session.commit()
         await session.refresh(doc)
 
-    # Kick off asynchronous background ingestion without blocking the HTTP response
-    asyncio.create_task(_run_background_ingestion(saved_path, filename, doc_id))
+    # Kick off asynchronous background ingestion with strong reference retention
+    _launch_ingestion_task(saved_path, filename, doc_id)
 
     return DocumentResponse.model_validate(doc)
 
