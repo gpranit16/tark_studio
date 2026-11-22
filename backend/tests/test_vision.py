@@ -1,17 +1,16 @@
-"""Unit tests for Unified Vision OCR Client (Gemini & Cloudflare)."""
+"""Unit tests for Cloudflare Workers AI Vision OCR Client."""
 
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
-from app.rag.vision import UnifiedVisionOCRClient, CloudflareVisionClient
+from app.rag.vision import CloudflareVisionClient
 
 
 @pytest.mark.asyncio
 async def test_vision_unconfigured_returns_none():
-    """Verify that when all vision credentials are missing, transcribe returns None without error."""
-    client = UnifiedVisionOCRClient()
-    client.gemini_api_key = None
-    client.cloudflare_account_id = None
-    client.cloudflare_api_token = None
+    """Verify that when Cloudflare credentials are missing, transcribe returns None without error."""
+    client = CloudflareVisionClient()
+    client.account_id = None
+    client.api_token = None
 
     with patch("shutil.which", return_value=None):
         result = await client.transcribe_image_bytes(b"dummy_bytes")
@@ -19,35 +18,11 @@ async def test_vision_unconfigured_returns_none():
 
 
 @pytest.mark.asyncio
-async def test_vision_gemini_success_mocked():
-    """Verify successful transcription extraction from Google Gemini Flash Vision."""
-    client = UnifiedVisionOCRClient()
-    client.gemini_api_key = "test_gemini_key"
-    client.cloudflare_account_id = None
-    client.cloudflare_api_token = None
-
-    mock_resp = MagicMock()
-    mock_resp.text = "Role: AI Engineer Intern\nStipend: Rs. 35,000/month"
-
-    mock_aio = MagicMock()
-    mock_aio.models.generate_content = AsyncMock(return_value=mock_resp)
-    mock_client = MagicMock()
-    mock_client.aio = mock_aio
-
-    with patch("google.genai.Client", return_value=mock_client):
-        res = await client.transcribe_image_bytes(b"dummy_bytes")
-        assert res is not None
-        assert "AI Engineer Intern" in res
-        assert "35,000" in res
-
-
-@pytest.mark.asyncio
 async def test_vision_cloudflare_transcribe_success_mocked():
     """Verify successful transcription extraction from Cloudflare response payload."""
     client = CloudflareVisionClient()
-    client.gemini_api_key = None
-    client.cloudflare_account_id = "test_acc"
-    client.cloudflare_api_token = "test_tok"
+    client.account_id = "test_acc"
+    client.api_token = "test_tok"
 
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -68,9 +43,8 @@ async def test_vision_cloudflare_transcribe_success_mocked():
 async def test_vision_cloudflare_transcribe_429_retry_handling():
     """Verify that HTTP 429 triggers retry with Retry-After inspection."""
     client = CloudflareVisionClient()
-    client.gemini_api_key = None
-    client.cloudflare_account_id = "test_acc"
-    client.cloudflare_api_token = "test_tok"
+    client.account_id = "test_acc"
+    client.api_token = "test_tok"
     client.max_retries = 1
 
     mock_429 = MagicMock()
@@ -86,3 +60,27 @@ async def test_vision_cloudflare_transcribe_429_retry_handling():
             res = await client.transcribe_image_bytes(b"dummy_bytes")
             assert res == "Transcribed successfully on retry"
             assert mock_sleep.call_count >= 1
+
+
+@pytest.mark.asyncio
+async def test_vision_cloudflare_auto_license_agreement():
+    """Verify that HTTP 400 license requirement automatically sends agreement and succeeds on retry."""
+    client = CloudflareVisionClient()
+    client.account_id = "test_acc"
+    client.api_token = "test_tok"
+    client.max_retries = 1
+
+    mock_license_err = MagicMock()
+    mock_license_err.status_code = 400
+    mock_license_err.text = '{"errors": [{"message": "You must agree to the terms of use for this model"}]}'
+
+    mock_agree_ack = MagicMock()
+    mock_agree_ack.status_code = 200
+
+    mock_retry_success = MagicMock()
+    mock_retry_success.status_code = 200
+    mock_retry_success.json.return_value = {"result": {"response": "Transcribed after license acceptance"}}
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=[mock_license_err, mock_agree_ack, mock_retry_success]):
+        res = await client.transcribe_image_bytes(b"dummy_bytes")
+        assert res == "Transcribed after license acceptance"
