@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     # Reranker settings (baseline, onnx)
     reranker_type: str = Field(default="baseline", alias="RERANKER_TYPE")
     reranker_model_onnx: str = Field(default="Xenova/ms-marco-MiniLM-L-6-v2", alias="RERANKER_MODEL_ONNX")
-    reranker_top_k: int = Field(default=5, alias="RERANKER_TOP_K")
+    reranker_top_k: int = Field(default=7, alias="RERANKER_TOP_K")
     reranker_candidate_k: int = Field(default=20, alias="RERANKER_CANDIDATE_K")
 
     # Conversation Memory settings (Rolling summary + Token-budget buffer)

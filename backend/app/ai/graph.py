@@ -706,7 +706,8 @@ async def rerank_node(state: ChatState, writer: StreamWriter) -> dict:
                 "excerpt": c.content[:1500],
             }
             citations.append(citation_item)
-            context_parts.append(f"[{c.citation_label}]\n{c.content}")
+            doc_prefix = f"Document: {c.document_name} | " if c.document_name else ""
+            context_parts.append(f"[{doc_prefix}{c.citation_label}]\n{c.content}")
 
         # Emit sources event to client via StreamWriter
         writer({"type": "sources", "data": {"citations": citations, "rag_status": rag_status}})
@@ -736,6 +737,8 @@ async def rerank_node(state: ChatState, writer: StreamWriter) -> dict:
                 "CRITICAL SOURCE-OF-TRUTH HIERARCHY & GROUNDING RULES:\n"
                 "1. DOCUMENT EVIDENCE IS THE SOLE AUTHORITATIVE SOURCE OF TRUTH:\n"
                 "   Base all factual answers strictly on the extracted text, hyperlinks, contact details, and tables present in the excerpts below.\n"
+                "   Synthesize information across multiple excerpts when comparing concepts, analyzing differences, or answering multi-part questions.\n"
+                "   Do not refuse to answer if the definitions, attributes, or relevant facts appear across different excerpt sections.\n"
                 "2. CONVERSATION CONTEXT VS DOCUMENT FACTS:\n"
                 "   Conversation history is provided ONLY to resolve pronouns (he, she, it) and user intent.\n"
                 "   NEVER adopt or repeat factual claims, locations, dates, or numbers from prior conversation turns if they are not explicitly substantiated by the current document excerpts.\n"
