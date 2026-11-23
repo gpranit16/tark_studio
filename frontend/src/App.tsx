@@ -24,6 +24,8 @@ import {
   UploadCloud,
   CheckSquare,
   BookOpen,
+  Cloud,
+  Shield,
 } from 'lucide-react';
 import { MarkdownRenderer } from './components/MarkdownRenderer';
 import { CitationDrawer } from './components/CitationDrawer';
@@ -144,21 +146,27 @@ export interface ConversationItem {
   last_message_preview?: string | null;
 }
 
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
+export const CLOUD_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://tark-studio.onrender.com').replace(/\/+$/, '');
+export const LOCAL_API_BASE_URL = 'http://127.0.0.1:8000';
 
-const DEFAULT_MODELS: ModelOption[] = [
+const DEFAULT_CLOUD_MODELS: ModelOption[] = [
   { id: 'openai/gpt-oss-20b', name: 'GPT-OSS 20B (Groq Fast)', provider: 'groq' },
   { id: 'openai/gpt-oss-120b', name: 'GPT-OSS 120B (Groq)', provider: 'groq' },
   { id: 'qwen/qwen3.8-27b', name: 'Qwen 3.8 27B (Groq)', provider: 'groq' },
   { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B (Groq)', provider: 'groq' },
 ];
 
+const DEFAULT_LOCAL_MODELS: ModelOption[] = [
+  { id: 'llama3.2', name: 'Llama 3.2 (Local RTX 3050)', provider: 'ollama' },
+  { id: 'qwen2.5', name: 'Qwen 2.5 (Local RTX 3050)', provider: 'ollama' },
+];
+
 export function resolveSystemStatus(health: BackendHealth | null, loading: boolean) {
   const isGroqReady = health?.providers?.groq_configured ?? health?.groq_configured;
   return {
     apiStatus: loading ? 'Checking...' : health ? 'Online' : 'Disconnected',
-    dbStatus: health?.database.connected ? 'Connected' : 'Docker / Local',
-    vectorStatus: health?.database.has_vector_extension ? 'Active' : 'Ready (768d)',
+    dbStatus: health?.database?.connected ? 'Connected' : 'Docker / Local',
+    vectorStatus: health?.database?.has_vector_extension ? 'Active' : 'Ready (768d)',
     groqStatus: isGroqReady ? 'Ready' : 'Missing Key',
   };
 }
@@ -171,10 +179,22 @@ const STARTER_PROMPTS = [
 ];
 
 export default function App() {
+  // Dual-Engine Mode: 'cloud' (Groq LPU) vs 'local' (RTX 3050 GPU)
+  const [engineMode, setEngineMode] = useState<'cloud' | 'local'>(() => {
+    const saved = localStorage.getItem('tark_engine_mode');
+    if (saved === 'cloud' || saved === 'local') return saved;
+    if (typeof window !== 'undefined' && window.location.hostname.includes('pages.dev')) {
+      return 'cloud';
+    }
+    return 'local';
+  });
+
+  const API_BASE_URL = engineMode === 'local' ? LOCAL_API_BASE_URL : CLOUD_API_BASE_URL;
+
   const [health, setHealth] = useState<BackendHealth | null>(null);
   const [loading, setLoading] = useState(true);
-  const [models, setModels] = useState<ModelOption[]>(DEFAULT_MODELS);
-  const [selectedModel, setSelectedModel] = useState<string>('openai/gpt-oss-20b');
+  const [models, setModels] = useState<ModelOption[]>(engineMode === 'local' ? DEFAULT_LOCAL_MODELS : DEFAULT_CLOUD_MODELS);
+  const [selectedModel, setSelectedModel] = useState<string>(engineMode === 'local' ? 'llama3.2' : 'openai/gpt-oss-20b');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -274,6 +294,32 @@ export default function App() {
 
   const sysStatus = resolveSystemStatus(health, loading);
 
+  // Filter models based on active engine mode
+  const availableModels = models.filter((m) => {
+    if (engineMode === 'local') {
+      return m.provider === 'ollama';
+    }
+    return m.provider !== 'ollama';
+  });
+
+  const displayModels = availableModels.length > 0
+    ? availableModels
+    : engineMode === 'local'
+    ? DEFAULT_LOCAL_MODELS
+    : DEFAULT_CLOUD_MODELS;
+
+  const handleSwitchEngine = (mode: 'cloud' | 'local') => {
+    if (mode === engineMode) return;
+    setEngineMode(mode);
+    localStorage.setItem('tark_engine_mode', mode);
+    setGlobalError(null);
+    if (mode === 'local') {
+      setSelectedModel('llama3.2');
+    } else {
+      setSelectedModel('openai/gpt-oss-20b');
+    }
+  };
+
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -295,7 +341,7 @@ export default function App() {
     } catch (err) {
       console.error('Failed to load documents:', err);
     }
-  }, []);
+  }, [API_BASE_URL]);
 
   // Auto-poll documents when any document is still 'processing'
   useEffect(() => {
@@ -382,7 +428,7 @@ export default function App() {
       }
       return [];
     },
-    [searchQuery, viewTab]
+    [searchQuery, viewTab, API_BASE_URL]
   );
 
   // Load a specific conversation and all its messages
@@ -428,10 +474,11 @@ export default function App() {
     setActiveConversationId(null);
     setMessages([]);
     setSessionTitle('New Session');
-  }, []);
+  }, [API_BASE_URL]);
 
-  // Poll backend health & models list, restore saved conversation
+  // Poll backend health & models list, restore saved conversation on engine switch or startup
   useEffect(() => {
+    setLoading(true);
     fetch(`${API_BASE_URL}/api/v1/health`)
       .then((res) => res.json())
       .then((data: BackendHealth) => {
@@ -454,14 +501,16 @@ export default function App() {
 
     fetchDocuments();
 
-    // Restore active conversation after page refresh
+    // Restore active conversation after page refresh or switch
     fetchConversations().then((list) => {
       const savedId = localStorage.getItem('tark_active_conversation_id');
-      if (savedId && list.some((c) => c.id === savedId)) {
+      if (savedId && list && list.some((c) => c.id === savedId)) {
         loadConversation(savedId);
+      } else {
+        handleNewChat();
       }
     });
-  }, [fetchConversations, loadConversation, fetchDocuments]);
+  }, [engineMode, API_BASE_URL, fetchConversations, loadConversation, fetchDocuments]);
 
   // Trigger search & tab filter with debounce
   useEffect(() => {
@@ -1278,15 +1327,23 @@ export default function App() {
               <span className="flex items-center gap-1.5 text-[#A5B49A] font-medium">
                 <span
                   className={`inline-block w-2 h-2 rounded-full ${
-                    sysStatus.groqStatus === 'Ready' ? 'bg-emerald-500' : 'bg-ember-copper'
+                    engineMode === 'local'
+                      ? health?.database?.connected ? 'bg-emerald-500' : 'bg-amber-400'
+                      : sysStatus.groqStatus === 'Ready' ? 'bg-emerald-500' : 'bg-ember-copper'
                   } animate-pulse`}
                 />
-                <span>Groq Cloud</span>
+                <span>{engineMode === 'local' ? 'NVIDIA RTX 3050' : 'Groq Cloud'}</span>
               </span>
-              <ExternalLink size={12} className="text-[#A5B49A]" />
+              {engineMode === 'local' ? (
+                <Shield size={12} className="text-emerald-400" />
+              ) : (
+                <ExternalLink size={12} className="text-[#A5B49A]" />
+              )}
             </div>
             <div className="text-[11px] text-[#B7BDAE] truncate">
-              {models.find((m) => m.id === selectedModel)?.name || selectedModel}
+              {engineMode === 'local'
+                ? 'CUDA Cores • Ollama Local'
+                : displayModels.find((m) => m.id === selectedModel)?.name || selectedModel}
             </div>
           </div>
         </div>
@@ -1306,13 +1363,44 @@ export default function App() {
         <div className="absolute inset-0 bg-gradient-to-t from-[#10130F]/50 via-transparent to-[#10130F]/40 pointer-events-none" />
 
         {/* =========================================================================
-            TOP CONTROL BAR
+            TOP CONTROL BAR (DUAL-ENGINE SWITCHER & SEGMENTED MODEL PICKER)
         ========================================================================= */}
         <header className="h-16 px-6 flex items-center justify-between z-10 border-b border-[#394336]/60 backdrop-blur-md flex-shrink-0 select-none">
-          {/* Left: Model Selector & Active Session Label */}
-          <div className="flex items-center gap-4">
+          {/* Left: Dual Engine Switcher & Model Selector */}
+          <div className="flex items-center gap-3">
+            {/* Dual-Engine Mode Toggle */}
+            <div className="flex items-center bg-[#171C17]/95 border border-[#394336] p-0.5 rounded-lg text-xs font-mono">
+              <button
+                type="button"
+                onClick={() => handleSwitchEngine('cloud')}
+                className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
+                  engineMode === 'cloud'
+                    ? 'bg-ember-copper/20 text-ember-copper border border-ember-copper/40 font-semibold shadow-sm'
+                    : 'text-[#929B89] hover:text-[#F1EEE6]'
+                }`}
+                title="Cloud Mode: High-throughput Groq LPU inference (Zero Setup)"
+              >
+                <Cloud size={12} />
+                <span className="hidden sm:inline">Cloud LPU</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSwitchEngine('local')}
+                className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
+                  engineMode === 'local'
+                    ? 'bg-emerald-950/70 text-emerald-400 border border-emerald-500/50 font-semibold shadow-sm'
+                    : 'text-[#929B89] hover:text-[#F1EEE6]'
+                }`}
+                title="Air-Gapped Private Mode: RTX 3050 Laptop GPU (0 Bytes Cloud Egress)"
+              >
+                <Shield size={12} className={engineMode === 'local' ? 'text-emerald-400' : ''} />
+                <span>Local RTX 3050</span>
+              </button>
+            </div>
+
+            {/* Model Selector filtered by active engine */}
             <div className="flex items-center gap-2">
-              <span className="font-mono text-xs font-semibold text-[#A5B49A] tracking-wider">
+              <span className="font-mono text-xs font-semibold text-[#A5B49A] tracking-wider hidden lg:inline">
                 MODEL:
               </span>
               <div className="relative">
@@ -1321,7 +1409,7 @@ export default function App() {
                   onChange={(e) => setSelectedModel(e.target.value)}
                   className="bg-[#171C17]/95 border border-[#394336] text-[#F1EEE6] font-mono text-xs py-1.5 pl-3 pr-8 rounded-lg hover:border-[#A5B49A] transition-colors cursor-pointer focus:outline-none"
                 >
-                  {models.map((m) => (
+                  {displayModels.map((m) => (
                     <option key={m.id} value={m.id} className="bg-[#171C17] text-[#F1EEE6]">
                       {m.name}
                     </option>
@@ -1331,7 +1419,7 @@ export default function App() {
             </div>
 
             {/* Active Session Badge & Smart Title Button */}
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-[#171C17]/80 border border-[#394336] rounded-md font-mono text-xs text-[#A5B49A]">
+            <div className="hidden xl:flex items-center gap-2 px-3 py-1 bg-[#171C17]/80 border border-[#394336] rounded-md font-mono text-xs text-[#A5B49A]">
               <span className="w-1.5 h-1.5 rounded-full bg-ember-copper inline-block" />
               <span className="text-[#F1EEE6] font-medium truncate max-w-xs">{sessionTitle}</span>
               {activeConversationId && (
@@ -1346,16 +1434,44 @@ export default function App() {
             </div>
           </div>
 
-          {/* Right: Telemetry & Model Provider Pill */}
+          {/* Right: Telemetry & Engine Status Indicator */}
           <div className="flex items-center gap-3">
             <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-md bg-[#171C17]/80 border border-[#394336] font-mono text-xs text-[#A5B49A]">
               <Zap size={13} className="text-ember-copper" />
-              <span>LangGraph + PG Checkpoint</span>
+              <span>{engineMode === 'local' ? 'RTX 3050 CUDA' : 'LangGraph + PG Checkpoint'}</span>
             </div>
 
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-[#20271F] border border-[#394336] text-xs font-mono text-[#F1EEE6]">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-              <span>{sysStatus.apiStatus}</span>
+            <div
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md border text-xs font-mono transition-colors ${
+                engineMode === 'local'
+                  ? health?.status === 'healthy'
+                    ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                    : 'bg-amber-950/40 border-amber-500/40 text-amber-300'
+                  : 'bg-[#20271F] border-[#394336] text-[#F1EEE6]'
+              }`}
+            >
+              {engineMode === 'local' ? (
+                health?.status === 'healthy' ? (
+                  <>
+                    <Shield size={12} className="text-emerald-400" />
+                    <span>0B Egress (127.0.0.1:8000)</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-amber-400 inline-block animate-pulse" />
+                    <span>Local Offline (run python run.py)</span>
+                  </>
+                )
+              ) : (
+                <>
+                  <span
+                    className={`w-2 h-2 rounded-full inline-block ${
+                      health ? 'bg-emerald-500' : 'bg-red-500'
+                    }`}
+                  />
+                  <span>{sysStatus.apiStatus}</span>
+                </>
+              )}
             </div>
           </div>
         </header>

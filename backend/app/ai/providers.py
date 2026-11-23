@@ -19,13 +19,9 @@ SUPPORTED_MODELS = [
     {"id": "qwen/qwen3.8-27b", "name": "Qwen 3.8 27B (Groq)", "provider": "groq", "description": "Multilingual reasoning model on Groq."},
     {"id": "llama-3.3-70b-versatile", "name": "Llama 3.3 70B (Groq)", "provider": "groq", "description": "Meta Llama 3.3 versatile 70B on Groq."},
 
-    # Gemini (Google Cloud)
-    {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash", "provider": "gemini", "description": "Google lightweight multimodal model with low latency."},
-    {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro", "provider": "gemini", "description": "Google flagship multimodal reasoning model."},
-
-    # Ollama (Local First)
-    {"id": "llama3.2", "name": "Llama 3.2 (Local Ollama)", "provider": "ollama", "description": "Local offline inference via Ollama runtime."},
-    {"id": "qwen2.5", "name": "Qwen 2.5 (Local Ollama)", "provider": "ollama", "description": "Local multilingual model via Ollama runtime."},
+    # Ollama (Local Sovereign Engine - RTX 3050 CUDA)
+    {"id": "llama3.2", "name": "Llama 3.2 (Local RTX 3050)", "provider": "ollama", "description": "Ultra-fast 3B local model running on RTX 3050 GPU."},
+    {"id": "qwen2.5", "name": "Qwen 2.5 (Local RTX 3050)", "provider": "ollama", "description": "High-accuracy 3B local reasoning on RTX 3050 GPU."},
 ]
 
 

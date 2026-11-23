@@ -58,4 +58,20 @@ async def test_models_endpoint(test_client: AsyncClient):
 async def test_chat_stream_payload_validation(test_client: AsyncClient):
     """Verify that chat stream endpoint validates missing message payloads."""
     response = await test_client.post("/api/v1/chat/stream", json={"messages": []})
-    assert response.status_code == 422  # validation error (min_length=1)
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_private_network_access_cors_header(test_client: AsyncClient):
+    """Verify Chrome Local Network Access (LNA) preflight header response."""
+    response = await test_client.options(
+        "/api/v1/health",
+        headers={
+            "Origin": "https://tark-studio.pages.dev",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Private-Network": "true",
+        },
+    )
+    assert response.status_code in (200, 204)
+    assert response.headers.get("access-control-allow-private-network") == "true"
+    assert response.headers.get("access-control-allow-origin") == "https://tark-studio.pages.dev"

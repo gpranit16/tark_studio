@@ -86,15 +86,24 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Configure CORS for local development and production Cloudflare Pages
+# Configure CORS for local development, production Cloudflare Pages, and Private Network Access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_cors_origins,
-    allow_origin_regex=r"^https:\/\/.*\.pages\.dev$" if not settings.debug else None,
+    allow_origins=settings.allowed_cors_origins + ["https://tark-studio.pages.dev"],
+    allow_origin_regex=r"^https:\/\/([a-zA-Z0-9_-]+\.)?tark-studio\.pages\.dev$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def add_private_network_access_header(request, call_next):
+    """Support Chrome Local Network Access (LNA) specification for loopback calls from public origins."""
+    response = await call_next(request)
+    if request.headers.get("access-control-request-private-network"):
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
 
 # Register route modules
 app.include_router(chat_router)
