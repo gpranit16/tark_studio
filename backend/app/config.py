@@ -33,6 +33,9 @@ class Settings(BaseSettings):
 
     # External AI Provider settings
     ollama_base_url: str = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")
+    ollama_num_ctx: int = Field(default=2048, alias="OLLAMA_NUM_CTX")
+    ollama_num_gpu: int = Field(default=99, alias="OLLAMA_NUM_GPU")
+    ollama_keep_alive: str = Field(default="60m", alias="OLLAMA_KEEP_ALIVE")
     groq_api_key: Optional[str] = Field(default=None, alias="GROQ_API_KEY")
     gemini_api_key: Optional[str] = Field(default=None, alias="GEMINI_API_KEY")
 

@@ -894,7 +894,9 @@ export default function App() {
           )
         );
       } else {
-        const errorText = `*[Error connecting to TARK inference engine: ${err.message}]*`;
+        const errorText = engineMode === 'local'
+          ? `*[Local Sovereign Engine is offline. To use your RTX 3050 GPU, start backend in terminal: \`cd backend && python run.py\`]*`
+          : `*[Error connecting to TARK inference engine: ${err.message}]*`;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
@@ -902,7 +904,11 @@ export default function App() {
               : m
           )
         );
-        setGlobalError(`Inference connection error: ${err.message}`);
+        setGlobalError(
+          engineMode === 'local'
+            ? 'Local engine offline — start backend: cd backend && python run.py'
+            : `Inference connection error: ${err.message}`
+        );
       }
     } finally {
       setIsGenerating(false);

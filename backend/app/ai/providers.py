@@ -189,15 +189,24 @@ async def stream_ollama(
     model: str,
     messages: List[dict],
     temperature: float,
+    num_ctx: Optional[int] = None,
 ) -> AsyncGenerator[str, None]:
-    """Stream token chunks from local Ollama instance."""
+    """Stream token chunks from local Ollama instance with full GPU acceleration."""
     client = get_ollama_client()
     formatted = [{"role": m["role"], "content": m["content"]} for m in messages]
+
+    options = {
+        "temperature": temperature,
+        "num_ctx": num_ctx or settings.ollama_num_ctx,
+        "num_gpu": settings.ollama_num_gpu,
+        "top_p": 0.9,
+    }
 
     response_stream = await client.chat(
         model=model,
         messages=formatted,
-        options={"temperature": temperature},
+        options=options,
+        keep_alive=settings.ollama_keep_alive,
         stream=True,
     )
 
