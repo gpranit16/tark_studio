@@ -33,7 +33,7 @@ class Settings(BaseSettings):
 
     # External AI Provider settings
     ollama_base_url: str = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")
-    ollama_num_ctx: int = Field(default=2048, alias="OLLAMA_NUM_CTX")
+    ollama_num_ctx: int = Field(default=8192, alias="OLLAMA_NUM_CTX")
     ollama_num_gpu: int = Field(default=99, alias="OLLAMA_NUM_GPU")
     ollama_keep_alive: str = Field(default="60m", alias="OLLAMA_KEEP_ALIVE")
     groq_api_key: Optional[str] = Field(default=None, alias="GROQ_API_KEY")
@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     enable_vision_ocr: bool = Field(default=True, alias="ENABLE_VISION_OCR")
 
     # Reranker settings (baseline, onnx)
-    reranker_type: str = Field(default="baseline", alias="RERANKER_TYPE")
+    reranker_type: str = Field(default="onnx", alias="RERANKER_TYPE")
     reranker_model_onnx: str = Field(default="Xenova/ms-marco-MiniLM-L-6-v2", alias="RERANKER_MODEL_ONNX")
     reranker_top_k: int = Field(default=7, alias="RERANKER_TOP_K")
     reranker_candidate_k: int = Field(default=20, alias="RERANKER_CANDIDATE_K")

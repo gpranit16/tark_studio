@@ -706,8 +706,8 @@ async def rerank_node(state: ChatState, writer: StreamWriter) -> dict:
                 "excerpt": c.content[:1500],
             }
             citations.append(citation_item)
-            doc_prefix = f"Document: {c.document_name} | " if c.document_name else ""
-            context_parts.append(f"[{doc_prefix}{c.citation_label}]\n{c.content}")
+            page_label = f"Page {c.book_page} (PDF p. {c.viewer_page})" if (c.book_page and c.book_page != str(c.viewer_page)) else f"Page {c.viewer_page}"
+            context_parts.append(f"--- [Document: {c.document_name} | {page_label}] ---\n{c.content.strip()}")
 
         # Emit sources event to client via StreamWriter
         writer({"type": "sources", "data": {"citations": citations, "rag_status": rag_status}})
@@ -727,31 +727,26 @@ async def rerank_node(state: ChatState, writer: StreamWriter) -> dict:
                 "Cite every factual statement with its source label, e.g. [Page X (PDF p. Y)].\n"
                 "Do NOT fabricate information not found in the excerpts.\n\n"
                 "DOCUMENT CONTEXT EXCERPTS:\n"
-                + "\n\n---\n\n".join(context_parts)
+                + "\n\n".join(context_parts)
             )
         else:
             grounding_instruction = (
                 "You are TARK Studio's grounded document intelligence assistant.\n"
-                "Answer the user's question accurately, thoroughly, and strictly using ONLY the provided document excerpts below.\n"
-                "Every factual statement must cite its source in the format [Page X (PDF p. Y)] or [Page X].\n\n"
-                "CRITICAL SOURCE-OF-TRUTH HIERARCHY & GROUNDING RULES:\n"
-                "1. DOCUMENT EVIDENCE IS THE SOLE AUTHORITATIVE SOURCE OF TRUTH:\n"
-                "   Base all factual answers strictly on the extracted text, hyperlinks, contact details, and tables present in the excerpts below.\n"
-                "   Synthesize information across multiple excerpts when comparing concepts, analyzing differences, or answering multi-part questions.\n"
-                "   Do not refuse to answer if the definitions, attributes, or relevant facts appear across different excerpt sections.\n"
-                "2. CONVERSATION CONTEXT VS DOCUMENT FACTS:\n"
-                "   Conversation history is provided ONLY to resolve pronouns (he, she, it) and user intent.\n"
-                "   NEVER adopt or repeat factual claims, locations, dates, or numbers from prior conversation turns if they are not explicitly substantiated by the current document excerpts.\n"
-                "3. CONFLICT RESOLUTION & RE-VERIFICATION:\n"
-                "   - If an earlier assistant answer or user message mentioned an incorrect or contradictory fact, supersede it completely by stating the true fact strictly from the current document evidence with its exact citation.\n"
-                "   - If the document contains multiple distinct values (such as primary contact vs secondary references), distinguish each context clearly with its respective citation rather than guessing.\n"
-                "4. FACTUAL ATTRIBUTE EXTRACTION:\n"
-                "   Extract all specific names, locations, LinkedIn/GitHub/portfolio URLs, contact emails/phones, dates, numbers, skills, and table records present in the text.\n"
-                "5. If the provided document excerpts do not contain the answer, explicitly state:\n"
-                "'The provided document(s) do not contain sufficient information to answer this question.'\n"
-                "NEVER fabricate citations or make claims unsupported by the text.\n\n"
+                "Answer the user's question accurately, thoroughly, and strictly using the provided document excerpts below.\n"
+                "Every factual statement must cite its source page(s) in the format [Page X (PDF p. Y)] or [Page X].\n\n"
+                "CORE GROUNDING & EXTRACTION PRINCIPLES:\n"
+                "1. THOROUGH EVIDENCE EXAMINATION:\n"
+                "   Carefully read all paragraphs, lists, tables, and key-value sections in the excerpts. In tabular and structured text, attribute names and their recorded values frequently appear on consecutive lines (e.g., 'Chief Executive Officer' followed by 'Meera Shah', or metric names followed by their numerical values). Extract these exact facts directly.\n"
+                "2. CROSS-EXCERPT SYNTHESIS:\n"
+                "   Synthesize facts across multiple pages and sections when comparing data, analyzing differences, or answering multi-part questions. Do not claim information is missing if different parts of the answer appear across different excerpts.\n"
+                "3. ACCURACY & CONVERSATION DISAMBIGUATION:\n"
+                "   Use conversation history solely to understand pronouns and context. Rely strictly on the document excerpts for all facts, figures, dates, and names.\n"
+                "4. HONEST BOUNDARY REFUSAL:\n"
+                "   Only if the requested information is genuinely absent from ALL provided excerpts, explicitly state:\n"
+                "   'The provided document(s) do not contain sufficient information to answer this question.'\n"
+                "   Never claim information is missing if the name, role, date, or fact is present in the excerpts above. Never fabricate citations or external facts.\n\n"
                 "DOCUMENT CONTEXT EXCERPTS:\n"
-                + "\n\n---\n\n".join(context_parts)
+                + "\n\n".join(context_parts)
             )
 
         augmented_messages = [

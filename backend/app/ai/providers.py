@@ -190,14 +190,19 @@ async def stream_ollama(
     messages: List[dict],
     temperature: float,
     num_ctx: Optional[int] = None,
+    estimated_prompt_tokens: Optional[int] = None,
 ) -> AsyncGenerator[str, None]:
-    """Stream token chunks from local Ollama instance with full GPU acceleration."""
+    """Stream token chunks from local Ollama instance with dynamic context window & full GPU acceleration."""
     client = get_ollama_client()
     formatted = [{"role": m["role"], "content": m["content"]} for m in messages]
 
+    # Dynamic context window: ensure Ollama never truncates RAG candidate excerpts
+    needed_ctx = (estimated_prompt_tokens or 0) + 1536
+    effective_num_ctx = num_ctx or max(settings.ollama_num_ctx, min(16384, needed_ctx))
+
     options = {
         "temperature": temperature,
-        "num_ctx": num_ctx or settings.ollama_num_ctx,
+        "num_ctx": effective_num_ctx,
         "num_gpu": settings.ollama_num_gpu,
         "top_p": 0.9,
     }
@@ -241,7 +246,12 @@ async def get_model_stream(
         async for delta in stream_gemini(model=model, messages=messages, temperature=temperature):
             yield delta
     elif resolved == "ollama":
-        async for delta in stream_ollama(model=model, messages=messages, temperature=temperature):
+        async for delta in stream_ollama(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            estimated_prompt_tokens=estimated_prompt_tokens,
+        ):
             yield delta
     else:
         raise ValueError(f"Unsupported model provider: '{resolved}' for model '{model}'")
