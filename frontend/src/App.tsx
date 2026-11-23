@@ -146,7 +146,11 @@ export interface ConversationItem {
   last_message_preview?: string | null;
 }
 
-export const CLOUD_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://tark-studio.onrender.com').replace(/\/+$/, '');
+const isPagesDev = typeof window !== 'undefined' && window.location.hostname.includes('pages.dev');
+
+export const CLOUD_API_BASE_URL = isPagesDev
+  ? 'https://tark-studio.onrender.com'
+  : (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
 export const LOCAL_API_BASE_URL = 'http://127.0.0.1:8000';
 
 const DEFAULT_CLOUD_MODELS: ModelOption[] = [
@@ -307,18 +311,6 @@ export default function App() {
     : engineMode === 'local'
     ? DEFAULT_LOCAL_MODELS
     : DEFAULT_CLOUD_MODELS;
-
-  const handleSwitchEngine = (mode: 'cloud' | 'local') => {
-    if (mode === engineMode) return;
-    setEngineMode(mode);
-    localStorage.setItem('tark_engine_mode', mode);
-    setGlobalError(null);
-    if (mode === 'local') {
-      setSelectedModel('llama3.2');
-    } else {
-      setSelectedModel('openai/gpt-oss-20b');
-    }
-  };
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -570,6 +562,20 @@ export default function App() {
     localStorage.removeItem('tark_active_conversation_id');
     setMessages([]);
     setSessionTitle('New Session');
+  };
+
+  const handleSwitchEngine = (mode: 'cloud' | 'local') => {
+    if (mode === engineMode) return;
+    handleNewChat();
+    setSelectedDocIds([]);
+    setEngineMode(mode);
+    localStorage.setItem('tark_engine_mode', mode);
+    setGlobalError(null);
+    if (mode === 'local') {
+      setSelectedModel('llama3.2');
+    } else {
+      setSelectedModel('openai/gpt-oss-20b');
+    }
   };
 
   const handleStartRename = (e: React.MouseEvent, conv: ConversationItem) => {
