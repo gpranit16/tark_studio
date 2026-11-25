@@ -25,9 +25,11 @@ from app.schemas.chat import (
     GenerateTitleResponse,
     ModelsResponse,
 )
+from app.config import settings
 from app.ai.providers import SUPPORTED_MODELS, resolve_provider
 from app.ai.graph import stream_chat_workflow, generate_chat_title
 from app.rag.cache import redis_cache, normalize_query
+from app.rag.embeddings import embeddings_client
 
 router = APIRouter(prefix="/api/v1", tags=["Chat & Conversations"])
 logger = logging.getLogger(__name__)
@@ -491,7 +493,7 @@ async def _persisting_stream_generator(
     is_cacheable = bool(norm_q) and (len(formatted_messages) == 1 or norm_q in prior_user_norms)
 
     try:
-        # 1. Fail-open L1 cache lookup (~0.4ms when enabled; bypassed on Retry/Regenerate)
+        # 1. Fail-open L1 exact + L2 entity-guarded semantic cache lookup (bypassed on Retry/Regenerate)
         if is_cacheable and save_user_message:
             cached = await redis_cache.get_cached_answer(
                 provider=provider,
@@ -501,16 +503,28 @@ async def _persisting_stream_generator(
                 query=user_content,
                 temperature=temperature,
             )
+            if (not cached or not cached.get("answer")) and settings.semantic_cache_enabled:
+                cached = await redis_cache.get_semantic_cached_answer(
+                    provider=provider,
+                    model=model,
+                    reranker_type=reranker_type,
+                    document_ids=document_ids,
+                    query=user_content,
+                    temperature=temperature,
+                    get_embedding_fn=lambda q: embeddings_client.get_embedding(q, is_query=True),
+                )
             if cached and cached.get("answer"):
                 from_cache = True
                 cached_answer = cached["answer"]
                 cached_citations = cached.get("citations") or []
                 cached_rag_status = cached.get("rag_status")
+                cache_tier = cached.get("cache_tier", "exact")
+                cache_sim = cached.get("similarity")
 
                 if document_ids:
                     sources_payload = {
                         "citations": cached_citations,
-                        "rag_status": {**(cached_rag_status or {}), "cached": True},
+                        "rag_status": {**(cached_rag_status or {}), "cached": True, "cache_tier": cache_tier},
                     }
                     yield f"event: sources\ndata: {json.dumps(sources_payload)}\n\n"
 
@@ -519,7 +533,10 @@ async def _persisting_stream_generator(
                     "provider": provider,
                     "conversation_id": str(conversation_id),
                     "cached": True,
+                    "cache_tier": cache_tier,
                 }
+                if cache_sim is not None:
+                    meta_payload["similarity"] = cache_sim
                 yield f"event: meta\ndata: {json.dumps(meta_payload)}\n\n"
 
                 # Emit token deltas in small chunks so frontend streaming animations behave identically
@@ -536,6 +553,7 @@ async def _persisting_stream_generator(
                     "status": "completed",
                     "finish_reason": "stop",
                     "cached": True,
+                    "cache_tier": cache_tier,
                     "timings": {
                         "retrieval_ms": 0.0,
                         "rerank_ms": 0.0,
@@ -546,6 +564,7 @@ async def _persisting_stream_generator(
                         "llm_total_ms": 0.0,
                         "backend_total_ms": total_ms,
                         "cached": True,
+                        "cache_tier": cache_tier,
                     },
                     "memory_status": {"active": False, "cached": True},
                 }
@@ -639,6 +658,11 @@ async def _persisting_stream_generator(
                         citations=accumulated_citations,
                         temperature=temperature,
                         rag_status=accumulated_rag_status,
+                        get_embedding_fn=(
+                            (lambda q: embeddings_client.get_embedding(q, is_query=True))
+                            if settings.semantic_cache_enabled
+                            else None
+                        ),
                     )
                 )
 

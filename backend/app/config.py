@@ -74,6 +74,9 @@ class Settings(BaseSettings):
     redis_url: Optional[str] = Field(default=None, alias="REDIS_URL")
     cache_ttl_seconds: int = Field(default=86400, alias="CACHE_TTL_SECONDS")
     embedding_cache_ttl_seconds: int = Field(default=604800, alias="EMBEDDING_CACHE_TTL_SECONDS")
+    semantic_cache_enabled: bool = Field(default=True, alias="SEMANTIC_CACHE_ENABLED")
+    semantic_cache_threshold: float = Field(default=0.90, alias="SEMANTIC_CACHE_THRESHOLD")
+    semantic_cache_max_entries: int = Field(default=100, alias="SEMANTIC_CACHE_MAX_ENTRIES")
 
     @property
     def allowed_cors_origins(self) -> list[str]:
