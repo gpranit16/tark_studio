@@ -88,8 +88,20 @@ class RedisCacheManager:
             self._trip_circuit(exc, "connect")
             return None
 
+    @staticmethod
+    async def _count_keys(client: Any, pattern: str, max_scans: int = 10) -> int:
+        """Count keys matching pattern with bounded non-blocking SCAN iterations."""
+        count = 0
+        cursor = 0
+        for _ in range(max_scans):
+            cursor, keys = await client.scan(cursor=cursor, match=pattern, count=200)
+            count += len(keys)
+            if int(cursor) == 0:
+                break
+        return count
+
     async def ping(self) -> Dict[str, Any]:
-        """Non-blocking health check returning Redis availability status."""
+        """Non-blocking health check returning Redis availability and safe cache stats."""
         if not self.is_enabled:
             return {"enabled": False, "connected": False}
         client = await self.get_client()
@@ -97,7 +109,30 @@ class RedisCacheManager:
             return {"enabled": True, "connected": False, "circuit_open": self._is_circuit_open()}
         try:
             ok = bool(await client.ping())
-            return {"enabled": True, "connected": ok}
+            result: Dict[str, Any] = {"enabled": True, "connected": ok}
+            if ok:
+                try:
+                    info_mem = await client.info("memory")
+                    info_stats = await client.info("stats")
+                    corpus_ver = await self.get_corpus_version()
+                    ans_count = await self._count_keys(client, "tark:ans:*")
+                    emb_count = await self._count_keys(client, "tark:emb:*")
+                    used_mem = info_mem.get("used_memory_human") or info_mem.get(b"used_memory_human")
+                    if isinstance(used_mem, bytes):
+                        used_mem = used_mem.decode("utf-8", errors="ignore")
+                    hits = int(info_stats.get("keyspace_hits") or info_stats.get(b"keyspace_hits") or 0)
+                    misses = int(info_stats.get("keyspace_misses") or info_stats.get(b"keyspace_misses") or 0)
+                    result.update({
+                        "corpus_version": corpus_ver,
+                        "answer_keys": ans_count,
+                        "embedding_keys": emb_count,
+                        "used_memory_human": used_mem,
+                        "hits": hits,
+                        "misses": misses,
+                    })
+                except Exception as stats_exc:
+                    logger.debug(f"[Redis] Safe stats skipped: {stats_exc}")
+            return result
         except Exception as exc:
             self._trip_circuit(exc, "ping")
             return {"enabled": True, "connected": False, "error": str(exc)}

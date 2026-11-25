@@ -35,6 +35,18 @@ class InMemoryFakeRedis:
         self.store[key] = str(nxt).encode("utf-8")
         return nxt
 
+    async def scan(self, cursor: int = 0, match: str = "*", count: int = 200):
+        prefix = match.rstrip("*")
+        matched = [k.encode("utf-8") for k in self.store if k.startswith(prefix)]
+        return 0, matched
+
+    async def info(self, section: str = ""):
+        if section == "memory":
+            return {"used_memory_human": "1.00M"}
+        if section == "stats":
+            return {"keyspace_hits": 3, "keyspace_misses": 1}
+        return {}
+
     async def aclose(self):
         return None
 
@@ -270,6 +282,34 @@ async def test_chat_stream_cache_hit_regenerate_and_multiturn_bypass(test_client
             async for _ in resp.aiter_text():
                 pass
         assert call_count == 3
+
+    redis_cache._client = None
+    redis_cache._initialized_url = None
+
+
+@pytest.mark.asyncio
+async def test_health_exposes_safe_redis_stats(test_client: AsyncClient, monkeypatch):
+    fake = InMemoryFakeRedis()
+    fake.store["tark:ans:v0:k1"] = b'{"answer": "secret"}'
+    fake.store["tark:emb:m1:k2"] = b"1234"
+    monkeypatch.setattr(settings, "redis_enabled", True)
+    monkeypatch.setattr(settings, "redis_url", "redis://127.0.0.1:6379/0")
+    redis_cache._client = fake
+    redis_cache._initialized_url = settings.redis_url
+    redis_cache._cooldown_until = 0.0
+
+    with patch("app.main.check_db_connectivity", new=AsyncMock(return_value={"connected": True})):
+        resp = await test_client.get("/api/v1/health")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["redis"]["connected"] is True
+    assert body["redis"]["answer_keys"] == 1
+    assert body["redis"]["embedding_keys"] == 1
+    assert body["redis"]["used_memory_human"] == "1.00M"
+    assert body["redis"]["hits"] == 3
+    assert body["redis"]["misses"] == 1
+    assert "secret" not in resp.text
 
     redis_cache._client = None
     redis_cache._initialized_url = None
