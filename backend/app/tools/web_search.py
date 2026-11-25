@@ -25,7 +25,7 @@ from app.rag.cache import redis_cache
 logger = logging.getLogger(__name__)
 
 TAVILY_SEARCH_URL = "https://api.tavily.com/search"
-_MAX_SNIPPET_CHARS = 1800
+_MAX_SNIPPET_CHARS = 1000
 _MIN_CACHEABLE_SCORE = 0.35
 _ESCALATION_SCORE_THRESHOLD = 0.45
 _SOCIAL_NOISE_DOMAINS = (
@@ -279,13 +279,14 @@ class WebSearchClient:
             return [], 0.0
 
         max_k = max_final_results or int(settings.web_search_max_results or 5)
+        fetch_k = min(10, max_k + 3)
         exclude_social = _should_exclude_social(user_query)
         batch_lists = await asyncio.gather(
             *(
                 self._search_single_tavily(
                     q,
                     topic=topic,
-                    max_results=max_k,
+                    max_results=fetch_k,
                     search_depth="basic",
                     exclude_social=exclude_social,
                 )
@@ -306,7 +307,7 @@ class WebSearchClient:
             retry_results = await self._search_single_tavily(
                 clean_queries[0],
                 topic="general",
-                max_results=max_k,
+                max_results=fetch_k,
                 search_depth="advanced",
                 exclude_social=exclude_social,
             )

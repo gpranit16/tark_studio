@@ -64,6 +64,8 @@ def _build_intent_system_prompt(today_iso: str) -> str:
         "- The query asks about current events, recent news, live prices/stocks/weather/sports, "
         "recent software releases/versions, current officeholders/leaders, or recent facts up to "
         f"{today_iso}.\n"
+        "- The query asks for mutable/evolving statistics, career totals, records, awards, or active entity status "
+        'that can change over time (especially when phrased with "till today", "to date", "so far", "currently", or "latest").\n'
         "- The query asks to look up, search, check, or verify specific current external websites, announcements, "
         'sources, or changing data (including imperative lookups like "search on X and tell" or "check reliable info").\n\n'
         "Set needs_web_search=false when:\n"
@@ -75,13 +77,12 @@ def _build_intent_system_prompt(today_iso: str) -> str:
         '- "general": DEFAULT for factual lookups, cumulative statistics/records/totals, rankings, software/AI '
         'model releases & specs, documentation, or encyclopedic answers (even when the user says "till today" or "latest").\n\n'
         "Query formulation rules when needs_web_search=true:\n"
-        "- Emit 1 (or 2 complementary) concise, standalone web search queries (at least 3-5 words each, e.g., "
-        '"latest Google Gemini model release 2026"); never emit a single generic word such as "Google".\n'
-        "- Resolve pronouns (it, they, that, its), incomplete follow-ups (\"search on X and tell\"), and likely "
-        "site/entity typos (e.g., misspelled sports/tech domain names like \"epson\" in a cricket thread -> ESPNcricinfo) "
-        "against the active conversation subject when prior turns establish an ongoing topic.\n"
-        "- If recent turns show previous results were insufficient or unreliable, generate fresh authoritative "
-        "reference queries (e.g., official stats, documentation, Wikipedia) rather than repeating the same weak phrasing.\n\n"
+        "- Emit 1 (or 2 complementary) concise, standalone descriptive search phrases (3-6 words each combining subject, "
+        "attribute, and time context when relevant); never emit a single generic word.\n"
+        "- Resolve pronouns (it, they, that, its), elliptic follow-ups (\"check official site\", \"what about price\"), "
+        "and likely entity/source misspellings against the active conversation subject established in prior turns.\n"
+        "- If recent turns show prior results were insufficient or low quality, formulate fresh authoritative reference "
+        "queries (targeting primary documentation, official statistics, or encyclopedic pages) rather than repeating the same weak phrasing.\n\n"
         "Respond strictly with valid JSON matching:\n"
         '{"needs_web_search": bool, "search_queries": ["..."], "topic": "general"|"news"|"finance", "reason": "brief"}'
     )

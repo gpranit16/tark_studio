@@ -807,8 +807,14 @@ async def web_agent_node(state: ChatState, writer: StreamWriter) -> dict:
     topic = "general"
 
     if mode == "on":
-        # Manual forced web search trigger from UI
-        search_queries = [active_query]
+        # Manual forced web search: rewrite multi-turn follow-ups so pronouns/context resolve cleanly
+        if len(chat_turns) > 1:
+            decision = await classify_web_intent(active_query, recent_turns=chat_turns)
+            intent_ms = decision.latency_ms
+            search_queries = decision.search_queries or [active_query]
+            topic = decision.topic or "general"
+        else:
+            search_queries = [active_query]
     else:
         # Auto mode: fast structured LLM intent classification (zero hardcoding)
         writer({"type": "agent_status", "data": {"phase": "checking_intent"}})
@@ -845,6 +851,8 @@ async def web_agent_node(state: ChatState, writer: StreamWriter) -> dict:
 
     citations = []
     context_blocks = []
+    total_ctx_chars = 0
+    _MAX_WEB_CONTEXT_CHARS = 4800
     for idx, r in enumerate(web_results, start=1):
         citations.append({
             "document_id": f"web:{idx}",
@@ -861,9 +869,10 @@ async def web_agent_node(state: ChatState, writer: StreamWriter) -> dict:
             "source_type": "web",
         })
         date_tag = f" | Date: {r.published_date}" if r.published_date else ""
-        context_blocks.append(
-            f"[Source {idx}: {r.title} ({r.url}){date_tag}]\n{r.content}"
-        )
+        block = f"[Source {idx}: {r.title} ({r.url}){date_tag}]\n{r.content}"
+        if total_ctx_chars + len(block) <= _MAX_WEB_CONTEXT_CHARS or idx <= 2:
+            context_blocks.append(block)
+            total_ctx_chars += len(block)
 
     rag_status = {
         "retrieval": "Web Search",
