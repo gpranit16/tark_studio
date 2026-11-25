@@ -316,3 +316,47 @@ async def test_chat_stream_excludes_live_web_answers_from_24h_cache(monkeypatch)
     assert not any(k.startswith("tark:ans:") for k in fake_kv)
     redis_cache._client = None
     redis_cache._initialized_url = None
+
+
+@pytest.mark.asyncio
+async def test_stream_groq_recovers_from_tool_choice_none_error(monkeypatch):
+    from groq import BadRequestError
+    import httpx
+    from app.ai.providers import stream_groq
+
+    monkeypatch.setattr(settings, "groq_api_key", "test-key")
+    calls = []
+
+    class FakeChunkStream:
+        def __init__(self, fail: bool):
+            self.fail = fail
+            self.response = SimpleNamespace(headers={})
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            if self.fail:
+                req = httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions")
+                resp = httpx.Response(400, request=req)
+                raise BadRequestError("Tool choice is none, but model called a tool", response=resp, body=None)
+            if not getattr(self, "_done", False):
+                self._done = True
+                return SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="Recovered answer"))])
+            raise StopAsyncIteration
+
+        async def close(self):
+            return None
+
+    async def fake_create(**kwargs):
+        calls.append(kwargs["model"])
+        return FakeChunkStream(fail=(len(calls) == 1))
+
+    fake_client = MagicMock()
+    fake_client.chat.completions.create = AsyncMock(side_effect=fake_create)
+
+    with patch("app.ai.providers.get_groq_client", return_value=fake_client):
+        tokens = [tok async for tok in stream_groq("openai/gpt-oss-120b", [{"role": "user", "content": "hi"}], 0.7)]
+
+    assert "".join(tokens) == "Recovered answer"
+    assert calls == ["openai/gpt-oss-120b", "qwen/qwen3.8-27b"]

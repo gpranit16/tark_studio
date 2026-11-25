@@ -4,7 +4,7 @@ import logging
 import re
 import asyncio
 from typing import AsyncGenerator, List, Optional, Callable
-from groq import AsyncGroq, RateLimitError
+from groq import AsyncGroq, BadRequestError, RateLimitError
 import ollama
 
 from app.config import settings
@@ -72,24 +72,56 @@ async def stream_groq(
     await groq_rate_limiter.wait_for_shared_cooldown(on_status=notify_rate_limit, request=request)
 
     max_attempts = 3
-    response_stream = None
+    active_model = model
+    active_messages = list(formatted)
+    yielded_any = False
 
     for attempt in range(1, max_attempts + 1):
         if request and await request.is_disconnected():
             logger.info("Client disconnected before sending request to Groq.")
             raise asyncio.CancelledError()
 
+        response_stream = None
         try:
             response_stream = await client.chat.completions.create(
-                model=model,
-                messages=formatted,
+                model=active_model,
+                messages=active_messages,
                 temperature=temperature,
                 stream=True,
             )
             # Live header extraction from httpx.Response attached to AsyncStream
             if hasattr(response_stream, "response") and hasattr(response_stream.response, "headers"):
                 groq_rate_limiter.update_from_headers(response_stream.response.headers)
-            break
+
+            async for chunk in response_stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yielded_any = True
+                    yield chunk.choices[0].delta.content
+            return
+
+        except BadRequestError as bre:
+            err_lower = str(bre).lower()
+            is_tool_bleed = (
+                "tool choice is none" in err_lower
+                or "called a tool" in err_lower
+                or "tool_use_failed" in err_lower
+            )
+            if is_tool_bleed and not yielded_any and attempt < max_attempts:
+                logger.warning(
+                    f"Groq model '{active_model}' attempted an unconfigured tool call on attempt {attempt}; "
+                    "retrying with plain-text guardrail / non-tool fallback."
+                )
+                active_messages = [
+                    {
+                        "role": "system",
+                        "content": "IMPORTANT: You have NO tools or functions. Answer directly in plain prose or markdown without any tool calls.",
+                    },
+                    *active_messages,
+                ]
+                if "gpt-oss" in active_model.lower():
+                    active_model = "qwen/qwen3.8-27b"
+                continue
+            raise
 
         except RateLimitError as rle:
             logger.warning(f"Groq RateLimitError on attempt {attempt}: {rle}")
@@ -147,18 +179,12 @@ async def stream_groq(
 
             notify_rate_limit({"status": "ready", "reason": "Retrying request now", "wait_sec": 0.0})
 
-    if response_stream is None:
-        raise RuntimeError("Failed to establish streaming response with Groq.")
-
-    try:
-        async for chunk in response_stream:
-            if chunk.choices and chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
-    finally:
-        try:
-            await response_stream.close()
-        except Exception:
-            pass
+        finally:
+            if response_stream is not None:
+                try:
+                    await response_stream.close()
+                except Exception:
+                    pass
 
 
 async def stream_gemini(

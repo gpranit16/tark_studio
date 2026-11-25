@@ -70,7 +70,9 @@ def _build_intent_system_prompt(today_iso: str) -> str:
         "writing/editing, translation, brainstorming, greetings, or well-established general knowledge.\n\n"
         "If needs_web_search=true, formulate 1 (or at most 2) concise, standalone web search queries, "
         "resolving any pronouns (it, they, that, its) from prior conversation turns and including the "
-        "relevant year/entity when helpful.\n\n"
+        "relevant year/entity when helpful. Every query MUST be a self-contained descriptive phrase "
+        "(at least 3-5 words including both the subject and specific topic, e.g., "
+        '"latest Google Gemini model release 2026"); never emit a single generic word such as "Google".\n\n'
         "Respond strictly with valid JSON matching:\n"
         '{"needs_web_search": bool, "search_queries": ["..."], "topic": "general"|"news"|"finance", "reason": "brief"}'
     )
