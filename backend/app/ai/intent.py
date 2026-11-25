@@ -64,15 +64,24 @@ def _build_intent_system_prompt(today_iso: str) -> str:
         "- The query asks about current events, recent news, live prices/stocks/weather/sports, "
         "recent software releases/versions, current officeholders/leaders, or recent facts up to "
         f"{today_iso}.\n"
-        "- The query asks to look up or verify specific current external websites, announcements, or changing data.\n\n"
+        "- The query asks to look up, search, check, or verify specific current external websites, announcements, "
+        'sources, or changing data (including imperative lookups like "search on X and tell" or "check reliable info").\n\n'
         "Set needs_web_search=false when:\n"
         "- The query asks for timeless programming/debugging help, math, algorithms, architecture design, "
         "writing/editing, translation, brainstorming, greetings, or well-established general knowledge.\n\n"
-        "If needs_web_search=true, formulate 1 (or at most 2) concise, standalone web search queries, "
-        "resolving any pronouns (it, they, that, its) from prior conversation turns and including the "
-        "relevant year/entity when helpful. Every query MUST be a self-contained descriptive phrase "
-        "(at least 3-5 words including both the subject and specific topic, e.g., "
-        '"latest Google Gemini model release 2026"); never emit a single generic word such as "Google".\n\n'
+        "Choose `topic` carefully:\n"
+        '- "news": ONLY for breaking/recent news headlines, announcements, match recaps, or unfolding events.\n'
+        '- "finance": ONLY for live stock prices, crypto/FX rates, market caps, or quarterly earnings.\n'
+        '- "general": DEFAULT for factual lookups, cumulative statistics/records/totals, rankings, software/AI '
+        'model releases & specs, documentation, or encyclopedic answers (even when the user says "till today" or "latest").\n\n'
+        "Query formulation rules when needs_web_search=true:\n"
+        "- Emit 1 (or 2 complementary) concise, standalone web search queries (at least 3-5 words each, e.g., "
+        '"latest Google Gemini model release 2026"); never emit a single generic word such as "Google".\n'
+        "- Resolve pronouns (it, they, that, its), incomplete follow-ups (\"search on X and tell\"), and likely "
+        "site/entity typos (e.g., misspelled sports/tech domain names like \"epson\" in a cricket thread -> ESPNcricinfo) "
+        "against the active conversation subject when prior turns establish an ongoing topic.\n"
+        "- If recent turns show previous results were insufficient or unreliable, generate fresh authoritative "
+        "reference queries (e.g., official stats, documentation, Wikipedia) rather than repeating the same weak phrasing.\n\n"
         "Respond strictly with valid JSON matching:\n"
         '{"needs_web_search": bool, "search_queries": ["..."], "topic": "general"|"news"|"finance", "reason": "brief"}'
     )

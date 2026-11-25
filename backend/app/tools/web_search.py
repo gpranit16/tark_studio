@@ -25,8 +25,37 @@ from app.rag.cache import redis_cache
 logger = logging.getLogger(__name__)
 
 TAVILY_SEARCH_URL = "https://api.tavily.com/search"
-_MAX_SNIPPET_CHARS = 1200
+_MAX_SNIPPET_CHARS = 1800
+_MIN_CACHEABLE_SCORE = 0.35
+_ESCALATION_SCORE_THRESHOLD = 0.45
+_SOCIAL_NOISE_DOMAINS = (
+    "facebook.com",
+    "linkedin.com",
+    "instagram.com",
+    "pinterest.com",
+    "tiktok.com",
+    "tracxn.com",
+    "threads.com",
+    "threads.net",
+)
+_JUNK_BOILERPLATE_MARKERS = (
+    "javascript is disabled in your browser",
+    "enable javascript to view",
+    "log in or sign up to view",
+    "create an account to continue",
+)
 _active_web_cache_tasks: set[asyncio.Task] = set()
+
+
+def _should_exclude_social(query_text: str) -> bool:
+    """Exclude social profile/login-wall directories unless explicitly requested."""
+    lowered = (query_text or "").lower()
+    return not any(dom.split(".")[0] in lowered for dom in _SOCIAL_NOISE_DOMAINS)
+
+
+def _is_junk_snippet(content: str) -> bool:
+    lowered = (content or "").lower()
+    return any(marker in lowered for marker in _JUNK_BOILERPLATE_MARKERS)
 
 
 def _schedule_web_cache_write(coro) -> None:
@@ -90,17 +119,31 @@ class WebSearchClient:
             self._http_client = None
 
     @staticmethod
-    def _build_cache_key(query: str, topic: str) -> str:
+    def _build_cache_key(
+        query: str,
+        topic: str,
+        search_depth: str = "basic",
+        exclude_social: bool = True,
+    ) -> str:
         norm = " ".join((query or "").strip().lower().split())
         q_hash = hashlib.sha256(norm.encode("utf-8")).hexdigest()
-        return f"tark:web:{topic}:{q_hash}"
+        ex_tag = "ex" if exclude_social else "all"
+        return f"tark:web:v2:{topic}:{search_depth}:{ex_tag}:{q_hash}"
 
-    async def _get_cached_results(self, query: str, topic: str) -> Optional[List[WebSearchResult]]:
+    async def _get_cached_results(
+        self,
+        query: str,
+        topic: str,
+        search_depth: str = "basic",
+        exclude_social: bool = True,
+    ) -> Optional[List[WebSearchResult]]:
         client = await redis_cache.get_client()
         if client is None:
             return None
         try:
-            raw = await client.get(self._build_cache_key(query, topic))
+            raw = await client.get(
+                self._build_cache_key(query, topic, search_depth=search_depth, exclude_social=exclude_social)
+            )
             if not raw:
                 return None
             items = json.loads(raw.decode("utf-8"))
@@ -112,9 +155,14 @@ class WebSearchClient:
             return None
 
     async def _set_cached_results(
-        self, query: str, topic: str, results: List[WebSearchResult]
+        self,
+        query: str,
+        topic: str,
+        results: List[WebSearchResult],
+        search_depth: str = "basic",
+        exclude_social: bool = True,
     ) -> None:
-        if not results:
+        if not results or max((r.score for r in results), default=0.0) < _MIN_CACHEABLE_SCORE:
             return
         client = await redis_cache.get_client()
         if client is None:
@@ -122,15 +170,25 @@ class WebSearchClient:
         try:
             payload = json.dumps([asdict(r) for r in results], ensure_ascii=False).encode("utf-8")
             ttl = max(60, int(settings.web_search_cache_ttl_seconds or 900))
-            await client.setex(self._build_cache_key(query, topic), ttl, payload)
+            key = self._build_cache_key(
+                query, topic, search_depth=search_depth, exclude_social=exclude_social
+            )
+            await client.setex(key, ttl, payload)
         except Exception as exc:
             logger.debug(f"[WebSearch] Redis cache write skipped: {exc}")
 
     async def _search_single_tavily(
-        self, query: str, topic: str = "general", max_results: int = 5
+        self,
+        query: str,
+        topic: str = "general",
+        max_results: int = 5,
+        search_depth: str = "basic",
+        exclude_social: bool = True,
     ) -> List[WebSearchResult]:
         """Execute a single Tavily REST search with 15m Redis caching."""
-        cached = await self._get_cached_results(query, topic)
+        cached = await self._get_cached_results(
+            query, topic, search_depth=search_depth, exclude_social=exclude_social
+        )
         if cached is not None:
             logger.info(f"[WebSearch] Redis cache HIT for query='{query[:60]}' ({len(cached)} results)")
             return cached
@@ -143,12 +201,14 @@ class WebSearchClient:
         payload: Dict[str, Any] = {
             "api_key": api_key,
             "query": query,
-            "search_depth": "basic",
+            "search_depth": search_depth,
             "topic": topic,
             "max_results": max(1, min(10, int(max_results))),
             "include_answer": False,
             "include_raw_content": False,
         }
+        if exclude_social:
+            payload["exclude_domains"] = list(_SOCIAL_NOISE_DOMAINS)
 
         try:
             client = self._get_http_client()
@@ -166,7 +226,7 @@ class WebSearchClient:
                     continue
                 content = sanitize_web_text(str(item.get("content") or ""))
                 title = sanitize_web_text(str(item.get("title") or url), max_chars=240)
-                if not content:
+                if not content or _is_junk_snippet(content):
                     continue
                 parsed.append(
                     WebSearchResult(
@@ -180,11 +240,29 @@ class WebSearchClient:
                 )
 
             if parsed:
-                _schedule_web_cache_write(self._set_cached_results(query, topic, parsed))
+                _schedule_web_cache_write(
+                    self._set_cached_results(
+                        query,
+                        topic,
+                        parsed,
+                        search_depth=search_depth,
+                        exclude_social=exclude_social,
+                    )
+                )
             return parsed
         except Exception as exc:
             logger.warning(f"[WebSearch] Tavily request failed (fail-open): {exc}")
             return []
+
+    @staticmethod
+    def _merge_results(lists: List[List[WebSearchResult]]) -> List[WebSearchResult]:
+        by_url: Dict[str, WebSearchResult] = {}
+        for lst in lists:
+            for item in lst:
+                norm_url = item.url.rstrip("/")
+                if norm_url not in by_url or item.score > by_url[norm_url].score:
+                    by_url[norm_url] = item
+        return sorted(by_url.values(), key=lambda x: x.score, reverse=True)
 
     async def search(
         self,
@@ -194,26 +272,46 @@ class WebSearchClient:
         max_final_results: Optional[int] = None,
         use_reranker: bool = True,
     ) -> tuple[List[WebSearchResult], float]:
-        """Run up to 2 search queries in parallel, deduplicate URLs, and rank by relevance."""
+        """Run up to 2 search queries in parallel, self-correct weak hits, deduplicate, and rank."""
         t0 = time.perf_counter()
         clean_queries = [q.strip() for q in queries if q and q.strip()][:2]
         if not clean_queries:
             return [], 0.0
 
         max_k = max_final_results or int(settings.web_search_max_results or 5)
+        exclude_social = _should_exclude_social(user_query)
         batch_lists = await asyncio.gather(
-            *(self._search_single_tavily(q, topic=topic, max_results=max_k) for q in clean_queries)
+            *(
+                self._search_single_tavily(
+                    q,
+                    topic=topic,
+                    max_results=max_k,
+                    search_depth="basic",
+                    exclude_social=exclude_social,
+                )
+                for q in clean_queries
+            )
         )
 
-        # Deduplicate by normalized URL preserving highest Tavily score
-        by_url: Dict[str, WebSearchResult] = {}
-        for lst in batch_lists:
-            for item in lst:
-                norm_url = item.url.rstrip("/")
-                if norm_url not in by_url or item.score > by_url[norm_url].score:
-                    by_url[norm_url] = item
+        merged = self._merge_results(list(batch_lists))
+        max_score = max((r.score for r in merged), default=0.0)
 
-        merged = sorted(by_url.values(), key=lambda x: x.score, reverse=True)
+        # Self-corrective escalation (CRAG-lite): when Hop 1 returns sparse or weak sources
+        # (common when `news` index misses reference/stats pages), retry once in general/advanced mode.
+        if len(merged) < 2 or max_score < _ESCALATION_SCORE_THRESHOLD:
+            logger.info(
+                f"[WebSearch] Escalating weak Hop-1 results (count={len(merged)}, max_score={max_score:.3f}, "
+                f"topic='{topic}') -> topic='general', search_depth='advanced'"
+            )
+            retry_results = await self._search_single_tavily(
+                clean_queries[0],
+                topic="general",
+                max_results=max_k,
+                search_depth="advanced",
+                exclude_social=exclude_social,
+            )
+            if retry_results:
+                merged = self._merge_results([merged, retry_results])
 
         # Use ONNX Cross-Encoder only when already warm in RAM and >max_k multi-query results need pruning
         if use_reranker and len(merged) > max_k:

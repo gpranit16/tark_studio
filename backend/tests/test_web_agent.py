@@ -360,3 +360,122 @@ async def test_stream_groq_recovers_from_tool_choice_none_error(monkeypatch):
 
     assert "".join(tokens) == "Recovered answer"
     assert calls == ["openai/gpt-oss-120b", "qwen/qwen3.8-27b"]
+
+
+@pytest.mark.asyncio
+async def test_web_search_escalates_weak_results_and_filters_junk(monkeypatch):
+    monkeypatch.setattr(settings, "tavily_api_key", "tvly-test")
+    monkeypatch.setattr(settings, "redis_enabled", False)
+
+    seen_payloads = []
+
+    async def fake_post(url, json=None):
+        seen_payloads.append(json)
+        if json["search_depth"] == "basic":
+            return SimpleNamespace(
+                status_code=200,
+                json=lambda: {
+                    "results": [
+                        {
+                            "title": "Tracxn Blocked Page",
+                            "url": "https://tracxn.com/d/people/example",
+                            "content": "JavaScript is disabled in your browser. Enable JavaScript to view.",
+                            "score": 0.90,
+                        },
+                        {
+                            "title": "Weak Stub",
+                            "url": "https://example.org/stub",
+                            "content": "Brief noisy social teaser.",
+                            "score": 0.25,
+                        },
+                    ]
+                },
+            )
+        return SimpleNamespace(
+            status_code=200,
+            json=lambda: {
+                "results": [
+                    {
+                        "title": "Official Reference Page",
+                        "url": "https://en.wikipedia.org/wiki/Reference",
+                        "content": "Verified comprehensive statistics and career summary.",
+                        "score": 0.84,
+                    },
+                    {
+                        "title": "Sports Database",
+                        "url": "https://www.espncricinfo.com/stats",
+                        "content": "Authoritative match-by-match record table.",
+                        "score": 0.79,
+                    },
+                ]
+            },
+        )
+
+    tool = WebSearchClient()
+    tool._http_client = MagicMock()
+    tool._http_client.is_closed = False
+    tool._http_client.post = AsyncMock(side_effect=fake_post)
+
+    results, _ = await tool.search(
+        ["cumulative athlete career records"],
+        user_query="How many records till today?",
+        topic="news",
+        use_reranker=False,
+    )
+
+    assert len(seen_payloads) == 2
+    assert seen_payloads[0]["topic"] == "news"
+    assert seen_payloads[0]["search_depth"] == "basic"
+    assert "linkedin.com" in seen_payloads[0]["exclude_domains"]
+    assert seen_payloads[1]["topic"] == "general"
+    assert seen_payloads[1]["search_depth"] == "advanced"
+    urls = [r.url for r in results]
+    assert "https://tracxn.com/d/people/example" not in urls
+    assert "https://en.wikipedia.org/wiki/Reference" in urls
+    assert results[0].score == 0.84
+
+
+@pytest.mark.asyncio
+async def test_web_search_allows_social_domains_when_explicitly_requested(monkeypatch):
+    monkeypatch.setattr(settings, "tavily_api_key", "tvly-test")
+    monkeypatch.setattr(settings, "redis_enabled", False)
+
+    seen_payloads = []
+
+    async def fake_post(url, json=None):
+        seen_payloads.append(json)
+        return SimpleNamespace(
+            status_code=200,
+            json=lambda: {
+                "results": [
+                    {
+                        "title": "LinkedIn Profile",
+                        "url": "https://www.linkedin.com/in/example",
+                        "content": "Engineering lead profile details.",
+                        "score": 0.81,
+                    },
+                    {
+                        "title": "LinkedIn Post",
+                        "url": "https://www.linkedin.com/posts/example",
+                        "content": "Engineering post details.",
+                        "score": 0.76,
+                    },
+                ]
+            },
+        )
+
+    tool = WebSearchClient()
+    tool._http_client = MagicMock()
+    tool._http_client.is_closed = False
+    tool._http_client.post = AsyncMock(side_effect=fake_post)
+
+    results, _ = await tool.search(
+        ["example engineer linkedin profile"],
+        user_query="Find his LinkedIn profile",
+        topic="general",
+        use_reranker=False,
+    )
+
+    assert len(seen_payloads) == 1
+    assert "exclude_domains" not in seen_payloads[0]
+    assert len(results) == 2
