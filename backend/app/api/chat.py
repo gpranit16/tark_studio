@@ -27,10 +27,18 @@ from app.schemas.chat import (
 )
 from app.ai.providers import SUPPORTED_MODELS, resolve_provider
 from app.ai.graph import stream_chat_workflow, generate_chat_title
-from app.rag.cache import redis_cache
+from app.rag.cache import redis_cache, normalize_query
 
 router = APIRouter(prefix="/api/v1", tags=["Chat & Conversations"])
 logger = logging.getLogger(__name__)
+_active_cache_tasks: set[asyncio.Task] = set()
+
+
+def _schedule_cache_write(coro) -> None:
+    """Schedule write-behind Redis task while holding a strong reference until completion."""
+    task = asyncio.create_task(coro)
+    _active_cache_tasks.add(task)
+    task.add_done_callback(_active_cache_tasks.discard)
 
 
 # ==============================================================================
@@ -472,8 +480,15 @@ async def _persisting_stream_generator(
     was_cancelled = False
     is_completed = False
     from_cache = False
-    # Only cache standalone first-turn queries so multi-turn follow-ups always resolve via LangGraph memory
-    is_cacheable = len(formatted_messages) == 1 and bool(user_content and user_content.strip())
+    norm_q = normalize_query(user_content)
+    prior_user_norms = {
+        normalize_query(m.get("content", ""))
+        for m in formatted_messages[:-1]
+        if m.get("role") == "user" and m.get("content")
+    }
+    # Cache first-turn standalone queries, or exact same-thread repeat of an earlier user query.
+    # Genuine follow-ups ("explain more", "what about 2024?") never match prior turns and bypass cache.
+    is_cacheable = bool(norm_q) and (len(formatted_messages) == 1 or norm_q in prior_user_norms)
 
     try:
         # 1. Fail-open L1 cache lookup (~0.4ms when enabled; bypassed on Retry/Regenerate)
@@ -613,7 +628,7 @@ async def _persisting_stream_generator(
         if full_response:
             # Non-blocking write-behind to Redis L1 cache (0ms added to response latency)
             if is_cacheable and not from_cache and redis_cache.is_enabled:
-                asyncio.create_task(
+                _schedule_cache_write(
                     redis_cache.set_cached_answer(
                         provider=provider,
                         model=model,

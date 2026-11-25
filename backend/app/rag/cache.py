@@ -153,13 +153,16 @@ class RedisCacheManager:
     # ------------------------------------------------------------------
 
     async def get_corpus_version(self) -> int:
-        """Read current O(1) corpus version integer (defaults to 0 so first INCR -> 1 never collides)."""
+        """Read current O(1) corpus version integer (initializes to 0 on first read)."""
         client = await self.get_client()
         if client is None:
             return 0
         try:
             raw = await client.get(CORPUS_VERSION_KEY)
-            return int(raw) if raw is not None else 0
+            if raw is None:
+                await client.setnx(CORPUS_VERSION_KEY, b"0")
+                return 0
+            return int(raw)
         except Exception as exc:
             self._trip_circuit(exc, "get_corpus_version")
             return 0

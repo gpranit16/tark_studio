@@ -29,6 +29,12 @@ class InMemoryFakeRedis:
         self.ttls[key] = ttl
         return True
 
+    async def setnx(self, key: str, value: bytes):
+        if key not in self.store:
+            self.store[key] = value
+            return True
+        return False
+
     async def incr(self, key: str) -> int:
         cur = int(self.store.get(key, b"0"))
         nxt = cur + 1
@@ -264,7 +270,27 @@ async def test_chat_stream_cache_hit_regenerate_and_multiturn_bypass(test_client
         assert ans4 == "Answer #2"
         assert done4.get("cached") is True
 
-        # 5. Multi-turn follow-up -> MUST bypass cache completely
+        # 5. Multi-turn novel follow-up -> MUST bypass cache completely
+        async with test_client.stream(
+            "POST",
+            "/api/v1/chat/stream",
+            json={
+                "messages": [
+                    {"role": "user", "content": "What is Q3 growth?"},
+                    {"role": "assistant", "content": "Answer #2"},
+                    {"role": "user", "content": "Explain the margin driver in detail"},
+                ],
+                "model": "openai/gpt-oss-120b",
+                "document_ids": [doc_uuid],
+                "temperature": 0.7,
+            },
+        ) as resp:
+            async for _ in resp.aiter_text():
+                pass
+        assert call_count == 3
+
+        # 6. Multi-turn exact repeat of an earlier user query in same chat -> MUST HIT cache
+        chunks_6 = []
         async with test_client.stream(
             "POST",
             "/api/v1/chat/stream",
@@ -279,9 +305,12 @@ async def test_chat_stream_cache_hit_regenerate_and_multiturn_bypass(test_client
                 "temperature": 0.7,
             },
         ) as resp:
-            async for _ in resp.aiter_text():
-                pass
+            async for txt in resp.aiter_text():
+                chunks_6.append(txt)
+        _, ans6, done6 = _parse_sse_events(chunks_6)
         assert call_count == 3
+        assert ans6 == "Answer #2"
+        assert done6.get("cached") is True
 
     redis_cache._client = None
     redis_cache._initialized_url = None
