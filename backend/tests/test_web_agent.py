@@ -508,3 +508,83 @@ def test_web_ranker_enforces_domain_diversity_and_keyword_match():
     domains = [r.domain for r in ranked]
     assert "openai.com" in domains
     assert domains.count("blog.example.com") == 2
+
+
+@pytest.mark.asyncio
+async def test_dual_track_target_domains_and_tracking_param_dedup(monkeypatch):
+    from app.ai.intent import _sanitize_target_domains
+
+    assert _sanitize_target_domains([
+        "https://www.Anthropic.com/news",
+        "platform.claude.com",
+        "facebook.com",
+        "not a domain!",
+    ]) == ["anthropic.com", "platform.claude.com"]
+
+    monkeypatch.setattr(settings, "tavily_api_key", "tvly-test")
+    monkeypatch.setattr(settings, "redis_enabled", False)
+
+    seen_payloads = []
+
+    async def fake_post(url, json=None):
+        seen_payloads.append(json)
+        if "include_domains" in json:
+            return SimpleNamespace(
+                status_code=200,
+                json=lambda: {
+                    "results": [
+                        {
+                            "title": "Introducing Claude Fable 5.2 and Mythos 5.2",
+                            "url": "https://www.anthropic.com/news/announcements",
+                            "content": "Nov 9, 2026 official announcement of Claude Fable 5.2 and Mythos 5.2.",
+                            "score": 0.72,
+                        }
+                    ]
+                },
+            )
+        return SimpleNamespace(
+            status_code=200,
+            json=lambda: {
+                "results": [
+                    {
+                        "title": "CNBC Copy A",
+                        "url": "https://www.cnbc.com/2026/11/09/story.html?msockid=111",
+                        "content": "Coverage of release in November 2026.",
+                        "score": 0.65,
+                    },
+                    {
+                        "title": "CNBC Copy B",
+                        "url": "https://www.cnbc.com/2026/11/09/story.html?msockid=222&utm_source=x",
+                        "content": "Duplicate tracking link.",
+                        "score": 0.60,
+                    },
+                    {
+                        "title": "SEO Blog Timeline",
+                        "url": "https://randomblog.example.com/timeline",
+                        "content": "Unordered blog timeline summary of AI models.",
+                        "score": 0.78,
+                    },
+                ]
+            },
+        )
+
+    tool = WebSearchClient()
+    tool._http_client = MagicMock()
+    tool._http_client.is_closed = False
+    tool._http_client.post = AsyncMock(side_effect=fake_post)
+
+    results, _ = await tool.search(
+        ["latest Anthropic Claude release November 2026", "Anthropic official announcements"],
+        user_query="latest model released by claude",
+        topic="general",
+        target_domains=["anthropic.com"],
+        use_reranker=False,
+    )
+
+    assert len(seen_payloads) == 2
+    assert any(p.get("include_domains") == ["anthropic.com"] for p in seen_payloads)
+    urls = [r.url for r in results]
+    # Tracking param duplicates collapsed into 1 URL
+    assert sum("cnbc.com" in u for u in urls) == 1
+    # Primary target domain outranks higher-raw-score SEO blog
+    assert results[0].domain == "anthropic.com"
