@@ -17,7 +17,7 @@ from app.ai.providers import get_groq_client
 
 logger = logging.getLogger(__name__)
 
-_INTENT_TIMEOUT_SEC = 2.5
+_INTENT_TIMEOUT_SEC = 4.0
 _intent_groq_client = None
 _intent_groq_key: Optional[str] = None
 

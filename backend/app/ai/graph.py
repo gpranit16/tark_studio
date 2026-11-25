@@ -982,8 +982,15 @@ async def stream_chat_workflow(
         "error": None,
         "document_ids": document_ids,
         "reranker_type": reranker_type,
+        "citations": [],
+        "retrieval_latency_ms": 0.0,
+        "rerank_latency_ms": 0.0,
+        "tok_ms": 0.0,
+        "inf_ms": 0.0,
         "web_search_mode": web_search_mode,
         "web_search_used": False,
+        "intent_latency_ms": 0.0,
+        "web_search_latency_ms": 0.0,
         "thread_id": effective_thread_id,
     }
 
