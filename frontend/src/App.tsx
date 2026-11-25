@@ -1093,7 +1093,7 @@ export default function App() {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-[260px_minmax(0,1fr)] lg:grid-cols-[288px_minmax(0,1fr)] h-[100dvh] w-full bg-[#10130F] text-[#F1EEE6] font-sans overflow-hidden p-0 sm:p-2.5 md:p-3.5 md:gap-3.5 relative">
+    <div className="grid grid-cols-1 grid-rows-[minmax(0,1fr)] md:grid-cols-[260px_minmax(0,1fr)] lg:grid-cols-[288px_minmax(0,1fr)] h-[100dvh] w-full bg-[#10130F] text-[#F1EEE6] font-sans overflow-hidden p-0 sm:p-2.5 md:p-3.5 md:gap-3.5 relative">
       {/* Mobile Sidebar Backdrop */}
       {isMobileSidebarOpen && (
         <div
@@ -1107,7 +1107,7 @@ export default function App() {
           LEFT SIDEBAR (EMBER SAGE NEO-BRUTALISM — RESPONSIVE DRAWER ON MOBILE)
       ========================================================================= */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-[84vw] max-w-[300px] md:static md:w-64 lg:w-72 flex-shrink-0 bg-[#171C17] border-r md:border border-[#394336] rounded-none md:rounded-xl flex flex-col justify-between p-4 shadow-2xl md:shadow-xl select-none transition-transform duration-200 ease-out ${
+        className={`fixed inset-y-0 left-0 z-40 w-[84vw] max-w-[300px] md:static md:relative md:w-full md:max-w-none h-full min-h-0 overflow-hidden flex-shrink-0 bg-[#171C17] border-r md:border border-[#394336] rounded-none md:rounded-xl flex flex-col justify-between p-4 shadow-2xl md:shadow-xl select-none transition-transform duration-200 ease-out ${
           isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
@@ -1450,7 +1450,7 @@ export default function App() {
       {/* =========================================================================
           MAIN CHAT WORKSPACE (CINEMATIC MOUNTAIN WALLPAPER + CLEAN RENDERING)
       ========================================================================= */}
-      <section className="flex-1 min-w-0 flex flex-col justify-between h-full overflow-hidden border-0 sm:border border-[#394336] rounded-none sm:rounded-xl relative bg-[#10130F] shadow-2xl">
+      <section className="min-w-0 min-h-0 h-full flex flex-col justify-between overflow-hidden border-0 sm:border border-[#394336] rounded-none sm:rounded-xl relative bg-[#10130F] shadow-2xl">
         {/* Background Wallpaper: Mountains & Glowing Copper Sun */}
         <div
           className="absolute inset-0 bg-cover bg-center pointer-events-none opacity-65"
