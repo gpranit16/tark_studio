@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveSystemStatus, BackendHealth } from './App';
+import { resolveSystemStatus, resolveEffectiveWebSearchMode, BackendHealth } from './App';
 
 describe('Application System Status Behavior', () => {
   it('resolves loading state correctly', () => {
@@ -64,5 +64,26 @@ describe('Application System Status Behavior', () => {
 
     expect(transformed).toContain('[Page 1](#cite-Page%201)');
     expect(transformed).toContain('[Page 1 (PDF p. 1)](#cite-Page%201%20(PDF%20p.%201))');
+  });
+
+  it('transforms inline web [Source N] references into clickable citation anchors', () => {
+    const rawText = "FastAPI 0.165.0 was released [Source 1] and verified [Source 2].";
+    const transformed = rawText.replace(/\[((?:[^\]\n]*\b)?(?:Page|p\.|Source)\s*[0-9]+[^\]\n]*)\]/gi, (_match, label) => {
+      const cleanLabel = label.trim();
+      return `[${cleanLabel}](#cite-${encodeURIComponent(cleanLabel)})`;
+    });
+
+    expect(transformed).toContain('[Source 1](#cite-Source%201)');
+    expect(transformed).toContain('[Source 2](#cite-Source%202)');
+  });
+
+  it('enforces local-mode 0B egress and PDF RAG isolation on web search mode', () => {
+    expect(resolveEffectiveWebSearchMode('local', 0, 'on')).toBe('off');
+    expect(resolveEffectiveWebSearchMode('local', 0, 'auto')).toBe('off');
+    expect(resolveEffectiveWebSearchMode('cloud', 2, 'on')).toBe('off');
+    expect(resolveEffectiveWebSearchMode('cloud', 1, 'auto')).toBe('off');
+    expect(resolveEffectiveWebSearchMode('cloud', 0, 'auto')).toBe('auto');
+    expect(resolveEffectiveWebSearchMode('cloud', 0, 'on')).toBe('on');
+    expect(resolveEffectiveWebSearchMode('cloud', 0, 'off')).toBe('off');
   });
 });

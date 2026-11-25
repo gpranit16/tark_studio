@@ -16,6 +16,8 @@ from app.config import settings
 from app.database import engine, check_db_connectivity
 from app.ai.graph import close_checkpointer
 from app.rag.cache import redis_cache
+from app.tools.web_search import web_search_client
+from app.ai.intent import close_intent_client
 from app.api.chat import router as chat_router
 from app.api.documents import router as documents_router
 
@@ -82,6 +84,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         import logging
         logging.getLogger("app.shutdown").warning(f"Error waiting for pending summaries during shutdown: {exc}")
 
+    await close_intent_client()
+    await web_search_client.close()
     await redis_cache.close()
     await close_checkpointer()
     await engine.dispose()

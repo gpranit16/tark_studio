@@ -15,8 +15,8 @@ export function MarkdownRenderer({ content, onCitationClick }: MarkdownRendererP
     if (!content) return '';
     // Normalize unicode non-breaking and thin spaces
     const normalized = content.replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ');
-    // Match [Page 1], [Page 1 (PDF p. 2)], [p. 15], [pythonlearn.pdf, Page 12], etc.
-    return normalized.replace(/\[((?:[^\]\n]*\b)?(?:Page|p\.)\s*[0-9]+[^\]\n]*)\]/gi, (_match, label) => {
+    // Match [Page 1], [Page 1 (PDF p. 2)], [p. 15], [Source 1], etc.
+    return normalized.replace(/\[((?:[^\]\n]*\b)?(?:Page|p\.|Source)\s*[0-9]+[^\]\n]*)\]/gi, (_match, label) => {
       const cleanLabel = label.trim();
       return `[${cleanLabel}](#cite-${encodeURIComponent(cleanLabel)})`;
     });

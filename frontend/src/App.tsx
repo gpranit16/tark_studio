@@ -26,6 +26,7 @@ import {
   BookOpen,
   Cloud,
   Shield,
+  Globe,
 } from 'lucide-react';
 import { MarkdownRenderer } from './components/MarkdownRenderer';
 import { CitationDrawer } from './components/CitationDrawer';
@@ -56,6 +57,19 @@ export interface CitationItem {
   citation_label: string;
   heading?: string | null;
   excerpt?: string | null;
+  url?: string;
+  domain?: string;
+  title?: string;
+  published_date?: string | null;
+  source_type?: 'web' | 'pdf' | string;
+}
+
+export type WebSearchMode = 'auto' | 'on' | 'off';
+
+export interface AgentStatus {
+  phase: 'checking_intent' | 'searching_web' | 'synthesizing' | 'direct_llm' | 'search_empty' | string;
+  queries?: string[];
+  reason?: string;
 }
 
 export interface DocumentItem {
@@ -101,6 +115,11 @@ export interface BackendTimings {
   llm_generation_ms: number;
   llm_total_ms?: number;
   backend_total_ms: number;
+  intent_ms?: number;
+  web_search_ms?: number;
+  web_search_used?: boolean;
+  cached?: boolean;
+  cache_tier?: string;
   rate_limit?: Record<string, any>;
 }
 
@@ -113,6 +132,8 @@ export interface RagStatus {
   rerank_latency_ms: number;
   tok_ms?: number;
   inf_ms?: number;
+  web_search?: boolean;
+  cached?: boolean;
 }
 
 export interface ChatMessage {
@@ -124,6 +145,7 @@ export interface ChatMessage {
   backendTimings?: BackendTimings;
   memoryStatus?: MemoryStatus;
   rateLimitStatus?: RateLimitStatus;
+  agentStatus?: AgentStatus;
   citations?: CitationItem[];
   ragStatus?: RagStatus;
 }
@@ -173,6 +195,17 @@ export function resolveSystemStatus(health: BackendHealth | null, loading: boole
     vectorStatus: health?.database?.has_vector_extension ? 'Active' : 'Ready (768d)',
     groqStatus: isGroqReady ? 'Ready' : 'Missing Key',
   };
+}
+
+export function resolveEffectiveWebSearchMode(
+  engineMode: 'cloud' | 'local',
+  selectedDocCount: number,
+  webSearchMode: WebSearchMode
+): WebSearchMode {
+  if (engineMode === 'local' || selectedDocCount > 0) {
+    return 'off';
+  }
+  return webSearchMode;
 }
 
 const STARTER_PROMPTS = [
@@ -230,7 +263,20 @@ export default function App() {
   const [isDocDrawerOpen, setIsDocDrawerOpen] = useState(false);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   const [selectedReranker, setSelectedReranker] = useState<'onnx' | 'baseline'>('onnx');
+  const [webSearchMode, setWebSearchMode] = useState<WebSearchMode>(() => {
+    const saved = localStorage.getItem('tark_web_search_mode');
+    if (saved === 'auto' || saved === 'on' || saved === 'off') return saved;
+    return 'auto';
+  });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const cycleWebSearchMode = () => {
+    if (engineMode === 'local' || selectedDocIds.length > 0) return;
+    const next: WebSearchMode =
+      webSearchMode === 'auto' ? 'on' : webSearchMode === 'on' ? 'off' : 'auto';
+    setWebSearchMode(next);
+    localStorage.setItem('tark_web_search_mode', next);
+  };
 
   // Citation Evidence Drawer states
   const [previewDrawerOpen, setPreviewDrawerOpen] = useState(false);
@@ -712,6 +758,7 @@ export default function App() {
           save_user_message: saveUserMessage,
           document_ids: selectedDocIds.length > 0 ? selectedDocIds : undefined,
           reranker_type: selectedDocIds.length > 0 ? selectedReranker : undefined,
+          web_search_mode: resolveEffectiveWebSearchMode(engineMode, selectedDocIds.length, webSearchMode),
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -802,6 +849,15 @@ export default function App() {
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantMsgId ? { ...m, memoryStatus: parsed } : m
+                )
+              );
+            } catch {}
+          } else if (eventType === 'agent_status' && dataStr) {
+            try {
+              const parsed: AgentStatus = JSON.parse(dataStr);
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId ? { ...m, agentStatus: parsed } : m
                 )
               );
             } catch {}
@@ -1622,6 +1678,12 @@ export default function App() {
                                 <span className="ml-2 text-[#929B89]">
                                   {msg.rateLimitStatus && msg.rateLimitStatus.status !== 'ready'
                                     ? 'Awaiting Groq token bucket capacity...'
+                                    : msg.agentStatus?.phase === 'checking_intent'
+                                    ? 'Analyzing query intent...'
+                                    : msg.agentStatus?.phase === 'searching_web'
+                                    ? `Searching the web${msg.agentStatus.queries?.[0] ? `: "${msg.agentStatus.queries[0]}"` : '...'}`
+                                    : msg.agentStatus?.phase === 'synthesizing'
+                                    ? 'Synthesizing grounded answer from web sources...'
                                     : 'Orchestrating via LangGraph...'}
                                 </span>
                               </div>
@@ -1732,6 +1794,20 @@ export default function App() {
                                     <span>Mem: <span className="text-[#A5B49A]">{msg.backendTimings.memory_ms}ms</span></span>
                                   </>
                                 )}
+                                {msg.backendTimings.web_search_ms !== undefined && msg.backendTimings.web_search_ms > 0 && (
+                                  <>
+                                    <span className="text-[#394336]">•</span>
+                                    <span>Web: <span className="text-[#E59A64]">{msg.backendTimings.web_search_ms}ms</span></span>
+                                  </>
+                                )}
+                                {msg.backendTimings.cached && (
+                                  <>
+                                    <span className="text-[#394336]">•</span>
+                                    <span className="text-[#A5B49A] font-semibold">
+                                      Cache: {msg.backendTimings.cache_tier === 'semantic' ? 'SEMANTIC HIT' : 'HIT'}
+                                    </span>
+                                  </>
+                                )}
                                 {msg.backendTimings.provider_ttft_ms !== undefined && (
                                   <>
                                     <span className="text-[#394336]">•</span>
@@ -1818,23 +1894,50 @@ export default function App() {
                               </span>
                             </div>
                             <div className="flex flex-wrap gap-1.5">
-                              {msg.citations.map((cite, cIdx) => (
-                                <button
-                                  key={cIdx}
-                                  type="button"
-                                  onClick={() => {
-                                    setPreviewCitations(msg.citations || []);
-                                    setPreviewInitialIndex(cIdx);
-                                    setPreviewDrawerOpen(true);
-                                  }}
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-mono bg-[#10130F] border border-[#394336] text-[#E59A64] hover:border-ember-copper hover:bg-[#20271F] transition-all cursor-pointer shadow-xs active:scale-95 group"
-                                  title={`Click to preview passage from ${cite.document_name}`}
-                                >
-                                  <FileText size={11} className="text-[#A5B49A] group-hover:text-ember-copper transition-colors" />
-                                  <span>{cite.citation_label}</span>
-                                  <span className="text-[10px] text-[#A5B49A] opacity-70 group-hover:opacity-100">↗</span>
-                                </button>
-                              ))}
+                              {msg.citations.map((cite, cIdx) => {
+                                const isWeb = cite.source_type === 'web' && !!cite.url;
+                                return (
+                                  <div key={cIdx} className="inline-flex items-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setPreviewCitations(msg.citations || []);
+                                        setPreviewInitialIndex(cIdx);
+                                        setPreviewDrawerOpen(true);
+                                      }}
+                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono bg-[#10130F] border border-[#394336] text-[#E59A64] hover:border-ember-copper hover:bg-[#20271F] transition-all cursor-pointer shadow-xs active:scale-95 group ${
+                                        isWeb ? 'rounded-l border-r-0' : 'rounded'
+                                      }`}
+                                      title={
+                                        isWeb
+                                          ? `Preview web snippet from ${cite.domain || cite.document_name}`
+                                          : `Click to preview passage from ${cite.document_name}`
+                                      }
+                                    >
+                                      {isWeb ? (
+                                        <Globe size={11} className="text-[#A5B49A] group-hover:text-ember-copper transition-colors" />
+                                      ) : (
+                                        <FileText size={11} className="text-[#A5B49A] group-hover:text-ember-copper transition-colors" />
+                                      )}
+                                      <span className="max-w-[220px] truncate">{cite.citation_label}</span>
+                                      {!isWeb && (
+                                        <span className="text-[10px] text-[#A5B49A] opacity-70 group-hover:opacity-100">↗</span>
+                                      )}
+                                    </button>
+                                    {isWeb && cite.url && (
+                                      <a
+                                        href={cite.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center justify-center px-2 py-1 rounded-r text-[11px] font-mono bg-[#10130F] border border-[#394336] text-[#A5B49A] hover:text-[#E59A64] hover:border-ember-copper hover:bg-[#20271F] transition-all shadow-xs"
+                                        title={`Open ${cite.url} in new tab`}
+                                      >
+                                        <ExternalLink size={11} />
+                                      </a>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         )}
@@ -2029,6 +2132,53 @@ export default function App() {
                 >
                   <Paperclip size={16} />
                 </button>
+
+                {/* Web Search Mode Toggle (Auto / Manual Web On / Off; Locked in Local & PDF modes) */}
+                {(() => {
+                  const isWebLocked = engineMode === 'local' || selectedDocIds.length > 0;
+                  const effectiveMode = resolveEffectiveWebSearchMode(engineMode, selectedDocIds.length, webSearchMode);
+                  const modeLabel =
+                    engineMode === 'local'
+                      ? 'Local'
+                      : selectedDocIds.length > 0
+                      ? 'PDF'
+                      : effectiveMode === 'on'
+                      ? 'Web'
+                      : effectiveMode === 'auto'
+                      ? 'Auto'
+                      : 'Off';
+                  const titleText =
+                    engineMode === 'local'
+                      ? 'Web search locked OFF in Local Sovereign Mode (0B Egress)'
+                      : selectedDocIds.length > 0
+                      ? 'PDF grounding active — detach files to enable Web Search'
+                      : effectiveMode === 'auto'
+                      ? 'Web Search: Auto (Intent checker runs when live info is needed) — click to switch'
+                      : effectiveMode === 'on'
+                      ? 'Web Search: Always ON (Manual trigger) — click to switch'
+                      : 'Web Search: OFF (Direct LLM only) — click to switch';
+                  return (
+                    <button
+                      type="button"
+                      onClick={cycleWebSearchMode}
+                      disabled={isWebLocked}
+                      title={titleText}
+                      data-testid="web-search-toggle"
+                      className={`h-9 px-2.5 rounded-lg border flex items-center gap-1.5 font-mono text-[11px] transition-all flex-shrink-0 ${
+                        isWebLocked
+                          ? 'bg-[#10130F] border-[#394336]/60 text-[#929B89]/60 cursor-not-allowed'
+                          : effectiveMode === 'on'
+                          ? 'bg-[#E59A64]/15 border-ember-copper text-[#E59A64] font-semibold cursor-pointer shadow-xs'
+                          : effectiveMode === 'auto'
+                          ? 'bg-[#20271F] border-[#A5B49A]/60 text-[#A5B49A] hover:border-ember-copper hover:text-[#F1EEE6] cursor-pointer'
+                          : 'bg-[#20271F] border-[#394336] text-[#929B89] hover:text-[#F1EEE6] hover:border-[#A5B49A] cursor-pointer'
+                      }`}
+                    >
+                      <Globe size={14} />
+                      <span className="hidden sm:inline">{modeLabel}</span>
+                    </button>
+                  );
+                })()}
 
                 {/* Textarea Input */}
                 <textarea

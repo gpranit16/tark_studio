@@ -3,6 +3,8 @@ import {
   X,
   BookOpen,
   FileText,
+  Globe,
+  ExternalLink,
   Copy,
   Check,
   ChevronLeft,
@@ -159,20 +161,38 @@ export function CitationDrawer({
           <div className="p-4 rounded-lg bg-[#20271F] border border-[#394336] space-y-2.5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <FileText size={15} className="text-[#E59A64]" />
+                {currentCitation.source_type === 'web' ? (
+                  <Globe size={15} className="text-[#E59A64]" />
+                ) : (
+                  <FileText size={15} className="text-[#E59A64]" />
+                )}
                 <span className="font-mono text-xs font-semibold text-[#F1EEE6] truncate max-w-xs">
                   {currentCitation.document_name}
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#10130F] border border-ember-copper/60 text-[#E59A64] font-medium">
-                  {currentCitation.book_page
-                    ? `Page ${currentCitation.book_page}`
-                    : `Page ${currentCitation.viewer_page}`}
-                </span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#10130F] border border-[#394336] text-[#929B89]">
-                  PDF p. {currentCitation.viewer_page}
-                </span>
+                {currentCitation.source_type === 'web' && currentCitation.url ? (
+                  <a
+                    href={currentCitation.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono bg-[#10130F] border border-ember-copper/60 text-[#E59A64] hover:bg-ember-copper hover:text-[#10130F] transition-colors font-medium"
+                  >
+                    <span>Open Source</span>
+                    <ExternalLink size={11} />
+                  </a>
+                ) : (
+                  <>
+                    <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#10130F] border border-ember-copper/60 text-[#E59A64] font-medium">
+                      {currentCitation.book_page
+                        ? `Page ${currentCitation.book_page}`
+                        : `Page ${currentCitation.viewer_page}`}
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#10130F] border border-[#394336] text-[#929B89]">
+                      PDF p. {currentCitation.viewer_page}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
 
@@ -185,7 +205,11 @@ export function CitationDrawer({
 
             <div className="flex items-center gap-2 pt-1 text-[10px] font-mono text-[#929B89]">
               <Layers size={11} className="text-[#A5B49A]" />
-              <span>Pipeline: nomic-embed-text (768d) + PostgreSQL FTS (RRF k=60)</span>
+              <span>
+                {currentCitation.source_type === 'web'
+                  ? 'Pipeline: LLM Intent Router + Tavily Web Search (Sanitized Grounding)'
+                  : 'Pipeline: nomic-embed-text (768d) + PostgreSQL FTS (RRF k=60)'}
+              </span>
             </div>
           </div>
 

@@ -35,6 +35,11 @@ class ChatState(TypedDict, total=False):
     dense_candidates_count: Optional[int]
     sparse_candidates_count: Optional[int]
     fused_candidates_count: Optional[int]
+    # Agentic web search fields (only active when document_ids is empty in Cloud mode)
+    web_search_mode: Optional[str]
+    web_search_used: Optional[bool]
+    intent_latency_ms: Optional[float]
+    web_search_latency_ms: Optional[float]
     # Conversation memory fields
     thread_id: Optional[str]
     summary: Optional[str]

@@ -78,6 +78,14 @@ class Settings(BaseSettings):
     semantic_cache_threshold: float = Field(default=0.90, alias="SEMANTIC_CACHE_THRESHOLD")
     semantic_cache_max_entries: int = Field(default=100, alias="SEMANTIC_CACHE_MAX_ENTRIES")
 
+    # Agentic Web Search & Intent Router (Cloud mode only, strictly blocked in Local Sovereign mode)
+    tavily_api_key: Optional[str] = Field(default=None, alias="TAVILY_API_KEY")
+    web_search_enabled: bool = Field(default=True, alias="WEB_SEARCH_ENABLED")
+    web_search_max_results: int = Field(default=5, alias="WEB_SEARCH_MAX_RESULTS")
+    web_search_timeout_sec: float = Field(default=5.0, alias="WEB_SEARCH_TIMEOUT_SEC")
+    web_search_cache_ttl_seconds: int = Field(default=900, alias="WEB_SEARCH_CACHE_TTL_SECONDS")
+    intent_router_model: str = Field(default="qwen/qwen3.8-27b", alias="INTENT_ROUTER_MODEL")
+
     @property
     def allowed_cors_origins(self) -> list[str]:
         """Parse comma-separated CORS origins or allow all in debug mode."""

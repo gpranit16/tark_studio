@@ -21,6 +21,10 @@ class ChatStreamRequest(BaseModel):
     save_user_message: bool = Field(default=True, description="Whether to persist the last user turn. Set False when retrying or regenerating.")
     document_ids: Optional[List[uuid.UUID]] = Field(default=None, description="Optional document UUIDs for RAG context grounding.")
     reranker_type: Optional[str] = Field(default=None, description="Optional reranker override: 'baseline', 'onnx'.")
+    web_search_mode: Literal["off", "auto", "on"] = Field(
+        default="auto",
+        description="Agentic web search mode when no documents are attached: 'off', 'auto' (intent-routed), or 'on' (forced).",
+    )
 
 
 class MessageResponse(BaseModel):

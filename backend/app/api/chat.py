@@ -473,6 +473,7 @@ async def _persisting_stream_generator(
     document_ids: Optional[List[str]] = None,
     reranker_type: Optional[str] = None,
     save_user_message: bool = True,
+    web_search_mode: str = "off",
 ):
     """Wraps stream_chat_workflow with fail-open L1 answer cache and PostgreSQL persistence."""
     start_time = time.perf_counter()
@@ -482,6 +483,7 @@ async def _persisting_stream_generator(
     was_cancelled = False
     is_completed = False
     from_cache = False
+    used_web_search = False
     norm_q = normalize_query(user_content)
     prior_user_norms = {
         normalize_query(m.get("content", ""))
@@ -493,8 +495,8 @@ async def _persisting_stream_generator(
     is_cacheable = bool(norm_q) and (len(formatted_messages) == 1 or norm_q in prior_user_norms)
 
     try:
-        # 1. Fail-open L1 exact + L2 entity-guarded semantic cache lookup (bypassed on Retry/Regenerate)
-        if is_cacheable and save_user_message:
+        # 1. Fail-open L1 exact + L2 entity-guarded semantic cache lookup (bypassed on Retry or forced Web ON)
+        if is_cacheable and save_user_message and web_search_mode != "on":
             cached = await redis_cache.get_cached_answer(
                 provider=provider,
                 model=model,
@@ -585,6 +587,7 @@ async def _persisting_stream_generator(
             request=request,
             document_ids=document_ids,
             reranker_type=reranker_type,
+            web_search_mode=web_search_mode,
         )
 
         async for chunk_str in stream:
@@ -603,6 +606,8 @@ async def _persisting_stream_generator(
                         accumulated_citations = parsed["citations"]
                     if isinstance(parsed.get("rag_status"), dict):
                         accumulated_rag_status = parsed["rag_status"]
+                        if accumulated_rag_status.get("web_search"):
+                            used_web_search = True
                 except Exception:
                     pass
             elif "event: token" in chunk_str and "data: " in chunk_str:
@@ -617,6 +622,8 @@ async def _persisting_stream_generator(
                 try:
                     data_part = chunk_str.split("data: ", 1)[1].strip()
                     parsed = json.loads(data_part)
+                    if (parsed.get("timings") or {}).get("web_search_used"):
+                        used_web_search = True
                     if parsed.get("status") == "completed":
                         is_completed = True
                     elif parsed.get("status") in ("cancelled", "abort"):
@@ -645,8 +652,8 @@ async def _persisting_stream_generator(
         full_response = "".join(accumulated_assistant_tokens).strip()
 
         if full_response:
-            # Non-blocking write-behind to Redis L1 cache (0ms added to response latency)
-            if is_cacheable and not from_cache and redis_cache.is_enabled:
+            # Non-blocking write-behind to Redis L1/L2 cache (never cache live web answers into 24h cache)
+            if is_cacheable and not from_cache and not used_web_search and web_search_mode != "on" and redis_cache.is_enabled:
                 _schedule_cache_write(
                     redis_cache.set_cached_answer(
                         provider=provider,
@@ -723,6 +730,7 @@ async def chat_stream(payload: ChatStreamRequest, request: Request):
             document_ids=doc_ids_str,
             reranker_type=payload.reranker_type,
             save_user_message=payload.save_user_message,
+            web_search_mode=payload.web_search_mode,
         ),
         media_type="text/event-stream",
         headers={
