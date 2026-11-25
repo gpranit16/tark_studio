@@ -69,6 +69,12 @@ class Settings(BaseSettings):
     # Security & CORS settings
     cors_origins: str = Field(default="http://localhost:5173,http://localhost:3000", alias="CORS_ORIGINS")
 
+    # Redis Cache & Distributed Rate Limiting (fail-open when disabled or unreachable)
+    redis_enabled: bool = Field(default=False, alias="REDIS_ENABLED")
+    redis_url: Optional[str] = Field(default=None, alias="REDIS_URL")
+    cache_ttl_seconds: int = Field(default=86400, alias="CACHE_TTL_SECONDS")
+    embedding_cache_ttl_seconds: int = Field(default=604800, alias="EMBEDDING_CACHE_TTL_SECONDS")
+
     @property
     def allowed_cors_origins(self) -> list[str]:
         """Parse comma-separated CORS origins or allow all in debug mode."""

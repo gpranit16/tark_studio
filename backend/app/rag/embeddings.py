@@ -20,6 +20,7 @@ from collections import OrderedDict
 import httpx
 
 from app.config import settings
+from app.rag.cache import redis_cache
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,31 @@ class BaseEmbeddingProvider(ABC):
         """Verify provider availability on startup."""
         return True
 
+    async def _get_cached_query_embedding(self, cache_prefix: str, cleaned_text: str) -> Optional[List[float]]:
+        """Lookup query embedding in L1 process LRU then L2 fail-open Redis cache."""
+        if not cleaned_text:
+            return None
+        cache_key = f"{cache_prefix}:{self.model_name}:{cleaned_text}"
+        cached = await _query_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        l2_cached = await redis_cache.get_cached_embedding(self.model_name, cleaned_text)
+        if l2_cached is not None:
+            await _query_cache.put(cache_key, l2_cached)
+            return l2_cached
+        return None
+
+    async def _store_cached_query_embedding(
+        self, cache_prefix: str, cleaned_text: str, vector: List[float]
+    ) -> None:
+        """Store query embedding in L1 LRU and schedule write-behind L2 Redis persistence."""
+        if not cleaned_text or not vector:
+            return
+        cache_key = f"{cache_prefix}:{self.model_name}:{cleaned_text}"
+        await _query_cache.put(cache_key, vector)
+        if redis_cache.is_enabled:
+            asyncio.create_task(redis_cache.set_cached_embedding(self.model_name, cleaned_text, vector))
+
 
 class OllamaEmbeddings(BaseEmbeddingProvider):
     """Asynchronous client for Ollama embedding generation (Local Development)."""
@@ -108,11 +134,22 @@ class OllamaEmbeddings(BaseEmbeddingProvider):
         return EMBEDDING_DIM
 
     async def get_embedding(self, text: str, is_query: bool = True) -> List[float]:
-        """Generate embedding vector for a single query or text passage."""
+        """Generate embedding vector for a single query or text passage with L1/L2 caching."""
+        cleaned = text.strip()
+        if is_query:
+            cached = await self._get_cached_query_embedding("ollama", cleaned)
+            if cached is not None:
+                return cached
+
         results = await self.get_embeddings_batch([text], is_query=is_query)
         if not results:
             raise RuntimeError(f"Ollama failed to return an embedding for prompt.")
-        return results[0]
+        emb = results[0]
+
+        if is_query:
+            await self._store_cached_query_embedding("ollama", cleaned, emb)
+
+        return emb
 
     async def get_embeddings_batch(
         self, texts: List[str], is_query: bool = False
@@ -257,11 +294,10 @@ class CloudflareEmbeddings(BaseEmbeddingProvider):
         return cleaned
 
     async def get_embedding(self, text: str, is_query: bool = True) -> List[float]:
-        """Generate 768d vector for a single query or text passage with LRU caching for queries."""
+        """Generate 768d vector for a single query or text passage with L1/L2 caching."""
         cleaned = text.strip()
         if is_query:
-            cache_key = f"cf:{self.model}:{cleaned}"
-            cached = await _query_cache.get(cache_key)
+            cached = await self._get_cached_query_embedding("cf", cleaned)
             if cached is not None:
                 return cached
 
@@ -271,8 +307,7 @@ class CloudflareEmbeddings(BaseEmbeddingProvider):
         emb = results[0]
 
         if is_query:
-            cache_key = f"cf:{self.model}:{cleaned}"
-            await _query_cache.put(cache_key, emb)
+            await self._store_cached_query_embedding("cf", cleaned, emb)
 
         return emb
 

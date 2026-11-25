@@ -27,6 +27,7 @@ from app.schemas.chat import (
 from app.rag.parser import ALLOWED_EXTENSIONS, MAX_FILE_SIZE_BYTES
 from app.rag.engine import ingest_document_file
 from app.rag.embeddings import embeddings_client, EMBEDDING_DIM
+from app.rag.cache import redis_cache
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ async def _run_background_ingestion(file_path: str, filename: str, doc_id: uuid.
     """Run ingestion in background task, updating status and error on failure."""
     try:
         await ingest_document_file(file_path=file_path, filename=filename, document_id=doc_id)
+        await redis_cache.bump_corpus_version()
     except Exception as exc:
         logger.exception(f"Background ingestion failed for {filename} ({doc_id}): {exc}")
         async with async_session_factory() as session:
@@ -209,4 +211,5 @@ async def delete_document(document_id: uuid.UUID):
 
         await session.delete(doc)
         await session.commit()
+        await redis_cache.bump_corpus_version()
         return {"deleted": True, "id": str(document_id)}

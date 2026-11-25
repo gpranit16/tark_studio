@@ -27,6 +27,7 @@ from app.schemas.chat import (
 )
 from app.ai.providers import SUPPORTED_MODELS, resolve_provider
 from app.ai.graph import stream_chat_workflow, generate_chat_title
+from app.rag.cache import redis_cache
 
 router = APIRouter(prefix="/api/v1", tags=["Chat & Conversations"])
 logger = logging.getLogger(__name__)
@@ -461,16 +462,86 @@ async def _persisting_stream_generator(
     request: Request,
     document_ids: Optional[List[str]] = None,
     reranker_type: Optional[str] = None,
+    save_user_message: bool = True,
 ):
-    """Wraps stream_chat_workflow to persist assistant completion in PostgreSQL only if completed."""
+    """Wraps stream_chat_workflow with fail-open L1 answer cache and PostgreSQL persistence."""
     start_time = time.perf_counter()
     accumulated_assistant_tokens: List[str] = []
     accumulated_citations: List[dict] = []
+    accumulated_rag_status: Optional[dict] = None
     was_cancelled = False
     is_completed = False
+    from_cache = False
+    # Only cache standalone first-turn queries so multi-turn follow-ups always resolve via LangGraph memory
+    is_cacheable = len(formatted_messages) == 1 and bool(user_content and user_content.strip())
 
     try:
-        # Stream through LangGraph immediately (zero DB wait before first token)
+        # 1. Fail-open L1 cache lookup (~0.4ms when enabled; bypassed on Retry/Regenerate)
+        if is_cacheable and save_user_message:
+            cached = await redis_cache.get_cached_answer(
+                provider=provider,
+                model=model,
+                reranker_type=reranker_type,
+                document_ids=document_ids,
+                query=user_content,
+                temperature=temperature,
+            )
+            if cached and cached.get("answer"):
+                from_cache = True
+                cached_answer = cached["answer"]
+                cached_citations = cached.get("citations") or []
+                cached_rag_status = cached.get("rag_status")
+
+                if document_ids:
+                    sources_payload = {
+                        "citations": cached_citations,
+                        "rag_status": {**(cached_rag_status or {}), "cached": True},
+                    }
+                    yield f"event: sources\ndata: {json.dumps(sources_payload)}\n\n"
+
+                meta_payload = {
+                    "model": model,
+                    "provider": provider,
+                    "conversation_id": str(conversation_id),
+                    "cached": True,
+                }
+                yield f"event: meta\ndata: {json.dumps(meta_payload)}\n\n"
+
+                # Emit token deltas in small chunks so frontend streaming animations behave identically
+                chunk_size = 32
+                for i in range(0, len(cached_answer), chunk_size):
+                    if request and await request.is_disconnected():
+                        was_cancelled = True
+                        return
+                    delta = cached_answer[i : i + chunk_size]
+                    yield f"event: token\ndata: {json.dumps({'delta': delta})}\n\n"
+
+                total_ms = round((time.perf_counter() - start_time) * 1000, 1)
+                done_payload = {
+                    "status": "completed",
+                    "finish_reason": "stop",
+                    "cached": True,
+                    "timings": {
+                        "retrieval_ms": 0.0,
+                        "rerank_ms": 0.0,
+                        "memory_ms": 0.0,
+                        "queue_wait_ms": 0.0,
+                        "provider_ttft_ms": total_ms,
+                        "llm_generation_ms": 0.0,
+                        "llm_total_ms": 0.0,
+                        "backend_total_ms": total_ms,
+                        "cached": True,
+                    },
+                    "memory_status": {"active": False, "cached": True},
+                }
+                yield f"event: done\ndata: {json.dumps(done_payload)}\n\n"
+
+                accumulated_assistant_tokens = [cached_answer]
+                accumulated_citations = cached_citations
+                is_completed = True
+                return
+
+        # 2. Cache miss or bypassed: stream through LangGraph immediately (zero DB wait before first token)
         stream = stream_chat_workflow(
             messages=formatted_messages,
             model=model,
@@ -496,6 +567,8 @@ async def _persisting_stream_generator(
                     parsed = json.loads(data_part)
                     if "citations" in parsed and isinstance(parsed["citations"], list):
                         accumulated_citations = parsed["citations"]
+                    if isinstance(parsed.get("rag_status"), dict):
+                        accumulated_rag_status = parsed["rag_status"]
                 except Exception:
                     pass
             elif "event: token" in chunk_str and "data: " in chunk_str:
@@ -538,6 +611,22 @@ async def _persisting_stream_generator(
         full_response = "".join(accumulated_assistant_tokens).strip()
 
         if full_response:
+            # Non-blocking write-behind to Redis L1 cache (0ms added to response latency)
+            if is_cacheable and not from_cache and redis_cache.is_enabled:
+                asyncio.create_task(
+                    redis_cache.set_cached_answer(
+                        provider=provider,
+                        model=model,
+                        reranker_type=reranker_type,
+                        document_ids=document_ids,
+                        query=user_content,
+                        answer=full_response,
+                        citations=accumulated_citations,
+                        temperature=temperature,
+                        rag_status=accumulated_rag_status,
+                    )
+                )
+
             try:
                 async with async_session_factory() as session:
                     assistant_msg = Message(
@@ -594,6 +683,7 @@ async def chat_stream(payload: ChatStreamRequest, request: Request):
             request=request,
             document_ids=doc_ids_str,
             reranker_type=payload.reranker_type,
+            save_user_message=payload.save_user_message,
         ),
         media_type="text/event-stream",
         headers={

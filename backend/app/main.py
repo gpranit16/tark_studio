@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import engine, check_db_connectivity
 from app.ai.graph import close_checkpointer
+from app.rag.cache import redis_cache
 from app.api.chat import router as chat_router
 from app.api.documents import router as documents_router
 
@@ -63,8 +64,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         import logging
         logging.getLogger("app.startup").warning(f"Embedding model check deferred: {exc}")
 
+    # Startup: Warm up Redis pool if enabled (fail-open if unavailable)
+    try:
+        if redis_cache.is_enabled:
+            await redis_cache.get_client()
+    except Exception as exc:
+        import logging
+        logging.getLogger("app.startup").warning(f"Redis warmup skipped: {exc}")
+
     yield
-    # Shutdown: gracefully await pending background rolling summaries, then dispose of checkpointer & DB
+    # Shutdown: gracefully await pending background rolling summaries, then dispose of checkpointer, Redis & DB
     try:
         from app.ai.memory import background_summary_manager
         import logging
@@ -73,6 +82,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         import logging
         logging.getLogger("app.shutdown").warning(f"Error waiting for pending summaries during shutdown: {exc}")
 
+    await redis_cache.close()
     await close_checkpointer()
     await engine.dispose()
 
@@ -126,10 +136,12 @@ async def root():
 async def health_check():
     """System, database, and provider connectivity status."""
     db_status = await check_db_connectivity()
+    redis_status = await redis_cache.ping()
     return {
         "status": "healthy" if db_status["connected"] else "degraded",
         "app_env": settings.app_env,
         "database": db_status,
+        "redis": redis_status,
         "providers": {
             "groq_configured": bool(settings.groq_api_key),
             "gemini_configured": bool(settings.gemini_api_key),

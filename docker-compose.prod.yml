@@ -36,6 +36,22 @@ services:
       - tark_internal
 
   # ----------------------------------------------------------------------------
+  # Redis 7 (Lightweight Cache & Multi-Worker Coordination)
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: tark_redis
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru", "--save", ""]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - tark_internal
+
+  # ----------------------------------------------------------------------------
   # TARK Studio FastAPI Backend & LangGraph Orchestration
   # ----------------------------------------------------------------------------
   backend:
@@ -46,6 +62,8 @@ services:
     restart: unless-stopped
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       ollama:
         condition: service_started
@@ -70,6 +88,8 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-https://tark-studio.pages.dev}
       MEMORY_TOKEN_BUDGET: "2048"
       MEMORY_SUMMARY_THRESHOLD_TOKENS: "1024"
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     volumes:
       - tark_uploads:/app/uploads
       - tark_models_cache:/root/.cache
