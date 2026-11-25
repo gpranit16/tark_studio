@@ -1,8 +1,12 @@
 """Unit tests for ProviderRateLimiter and rate limit tracking."""
 
+import asyncio
 import time
 import pytest
+from unittest.mock import AsyncMock, MagicMock
 from app.ai.rate_limiter import ProviderRateLimiter, parse_reset_time_seconds
+from app.config import settings
+from app.rag.cache import redis_cache
 
 
 def test_parse_reset_time_seconds():
@@ -62,3 +66,69 @@ async def test_rate_limiter_acquire_slot_immediate():
     assert wait_ms >= 0.0
     assert len(status_events) == 0
     assert limiter.remaining_tokens <= 5000
+
+
+class _FakeRedisRL:
+    def __init__(self) -> None:
+        self.kv: dict[str, bytes] = {}
+        self.hashes: dict[str, dict] = {}
+
+    async def get(self, key: str):
+        return self.kv.get(key)
+
+    async def setex(self, key: str, ttl: int, val: str):
+        self.kv[key] = val.encode("utf-8")
+        return True
+
+    async def hset(self, key: str, mapping: dict):
+        self.hashes[key] = mapping
+        return True
+
+    async def expire(self, key: str, ttl: int):
+        return True
+
+
+@pytest.mark.asyncio
+async def test_shared_cooldown_propagation_across_workers(monkeypatch):
+    fake_redis = _FakeRedisRL()
+    monkeypatch.setattr(settings, "redis_enabled", True)
+    monkeypatch.setattr(settings, "redis_url", "redis://127.0.0.1:6379/0")
+    redis_cache._client = fake_redis
+    redis_cache._initialized_url = settings.redis_url
+    redis_cache._cooldown_until = 0.0
+
+    worker1 = ProviderRateLimiter(provider="groq_test", default_limit_tokens=8000)
+    worker2 = ProviderRateLimiter(provider="groq_test", default_limit_tokens=8000)
+
+    # Worker 1 hits 429 and broadcasts cooldown -> Worker 2 must see it via Redis
+    worker1.record_cooldown(2.0)
+    await asyncio.sleep(0.02)
+
+    rem = await worker2.get_shared_cooldown_remaining()
+    assert 1.0 < rem <= 2.1
+
+    redis_cache._client = None
+    redis_cache._initialized_url = None
+
+
+@pytest.mark.asyncio
+async def test_rate_limiter_fail_open_on_redis_error(monkeypatch):
+    monkeypatch.setattr(settings, "redis_enabled", True)
+    monkeypatch.setattr(settings, "redis_url", "redis://127.0.0.1:6379/0")
+    broken = MagicMock()
+    broken.get = AsyncMock(side_effect=ConnectionError("Redis offline"))
+    broken.hset = AsyncMock(side_effect=ConnectionError("Redis offline"))
+    redis_cache._client = broken
+    redis_cache._initialized_url = settings.redis_url
+    redis_cache._cooldown_until = 0.0
+
+    limiter = ProviderRateLimiter(provider="groq_failopen", default_limit_tokens=8000)
+    # Must never raise on Redis failure
+    limiter.update_from_headers({"x-ratelimit-remaining-tokens": "3000"})
+    await asyncio.sleep(0.02)
+    wait_ms = await limiter.wait_for_shared_cooldown()
+    assert wait_ms == 0.0
+    assert limiter.remaining_tokens == 3000
+
+    redis_cache._client = None
+    redis_cache._initialized_url = None

@@ -68,6 +68,9 @@ async def stream_groq(
         if writer:
             writer({"type": "rate_limit", "data": payload})
 
+    # Respect any active shared cooldown broadcast by another worker (0ms when clear or Redis off)
+    await groq_rate_limiter.wait_for_shared_cooldown(on_status=notify_rate_limit, request=request)
+
     max_attempts = 3
     response_stream = None
 
@@ -118,6 +121,7 @@ async def stream_groq(
 
             # Cap TPM retry wait to at most 10 seconds to avoid long hangs
             retry_after = min(10.0, max(0.5, retry_after))
+            groq_rate_limiter.record_cooldown(retry_after)
 
             if attempt == max_attempts:
                 if writer:
@@ -196,9 +200,10 @@ async def stream_ollama(
     client = get_ollama_client()
     formatted = [{"role": m["role"], "content": m["content"]} for m in messages]
 
-    # Dynamic context window: ensure Ollama never truncates RAG candidate excerpts
+    # Dynamic context window: ensure Ollama never truncates RAG candidate excerpts, even if num_ctx is explicitly passed
     needed_ctx = (estimated_prompt_tokens or 0) + 1536
-    effective_num_ctx = num_ctx or max(settings.ollama_num_ctx, min(16384, needed_ctx))
+    base_limit = num_ctx if num_ctx is not None else settings.ollama_num_ctx
+    effective_num_ctx = max(base_limit, min(16384, needed_ctx))
 
     options = {
         "temperature": temperature,

@@ -1,12 +1,29 @@
-"""Rate-limit aware request tracking and per-provider queue for TARK Studio."""
+"""Rate-limit aware request tracking and fail-open distributed Redis coordination for TARK Studio."""
 
 import asyncio
 import logging
+import math
 import re
 import time
 from typing import Callable, Optional, Dict, Any, List
 
+from app.rag.cache import redis_cache
+
 logger = logging.getLogger(__name__)
+_rl_sync_tasks: set[asyncio.Task] = set()
+_MAX_SHARED_COOLDOWN_SEC = 10.0
+
+
+def _schedule_bg(coro) -> None:
+    """Schedule async Redis sync if an event loop is active; retain strong reference."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        coro.close()
+        return
+    task = asyncio.create_task(coro)
+    _rl_sync_tasks.add(task)
+    task.add_done_callback(_rl_sync_tasks.discard)
 
 
 def parse_reset_time_seconds(reset_str: Optional[str]) -> float:
@@ -30,7 +47,7 @@ def parse_reset_time_seconds(reset_str: Optional[str]) -> float:
 
 
 class ProviderRateLimiter:
-    """Rate-limit aware request tracker with proactive token-bucket tracking and controlled queue."""
+    """Rate-limit aware request tracker with fail-open Redis multi-worker coordination."""
 
     def __init__(self, provider: str = "groq", default_limit_tokens: int = 8000):
         self.provider = provider
@@ -41,6 +58,110 @@ class ProviderRateLimiter:
         self.lock = asyncio.Lock()
         self.last_queue_wait_ms = 0.0
         self.last_headers: Dict[str, Any] = {}
+        self._cooldown_until_wall: float = 0.0
+
+    @property
+    def _state_key(self) -> str:
+        return f"tark:rl:{self.provider}:state"
+
+    @property
+    def _cooldown_key(self) -> str:
+        return f"tark:rl:{self.provider}:cooldown"
+
+    async def _sync_state_to_redis(self) -> None:
+        client = await redis_cache.get_client()
+        if client is None:
+            return
+        try:
+            await client.hset(
+                self._state_key,
+                mapping={
+                    "limit_tokens": str(self.limit_tokens),
+                    "remaining_tokens": str(self.remaining_tokens),
+                    "updated_wall": str(time.time()),
+                },
+            )
+            await client.expire(self._state_key, 120)
+        except Exception as exc:
+            logger.debug(f"[{self.provider}] Redis rate-limit state sync skipped (fail-open): {exc}")
+
+    async def _sync_cooldown_to_redis(self, cooldown_until: float, ttl_sec: int) -> None:
+        client = await redis_cache.get_client()
+        if client is None:
+            return
+        try:
+            await client.setex(self._cooldown_key, max(1, ttl_sec), str(cooldown_until))
+        except Exception as exc:
+            logger.debug(f"[{self.provider}] Redis cooldown sync skipped (fail-open): {exc}")
+
+    def record_cooldown(self, retry_after_sec: float) -> None:
+        """Broadcast a provider 429 cooldown across workers without blocking callers."""
+        bounded = min(_MAX_SHARED_COOLDOWN_SEC, max(0.5, float(retry_after_sec)))
+        cooldown_until = time.time() + bounded
+        self._cooldown_until_wall = max(self._cooldown_until_wall, cooldown_until)
+        if redis_cache.is_enabled:
+            _schedule_bg(self._sync_cooldown_to_redis(cooldown_until, int(math.ceil(bounded))))
+
+    async def get_shared_cooldown_remaining(self) -> float:
+        """Return remaining seconds on shared cooldown (0.0 if clear or Redis unavailable)."""
+        now = time.time()
+        local_rem = max(0.0, self._cooldown_until_wall - now)
+
+        if not redis_cache.is_enabled:
+            return min(_MAX_SHARED_COOLDOWN_SEC, local_rem)
+
+        client = await redis_cache.get_client()
+        if client is None:
+            return min(_MAX_SHARED_COOLDOWN_SEC, local_rem)
+
+        try:
+            raw = await client.get(self._cooldown_key)
+            if raw is not None:
+                remote_until = float(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
+                self._cooldown_until_wall = max(self._cooldown_until_wall, remote_until)
+                local_rem = max(local_rem, remote_until - now)
+        except Exception as exc:
+            logger.debug(f"[{self.provider}] Redis cooldown read skipped (fail-open): {exc}")
+
+        return min(_MAX_SHARED_COOLDOWN_SEC, max(0.0, local_rem))
+
+    async def wait_for_shared_cooldown(
+        self,
+        on_status: Optional[Callable[[dict], None]] = None,
+        request=None,
+    ) -> float:
+        """Wait briefly only if another worker recently triggered a 429 cooldown; 0ms on healthy path."""
+        wait_sec = await self.get_shared_cooldown_remaining()
+        if wait_sec <= 0.1:
+            return 0.0
+
+        t_start = time.perf_counter()
+        remaining = wait_sec
+        step = 0.5
+        while remaining > 0:
+            if request and await request.is_disconnected():
+                raise asyncio.CancelledError()
+            if on_status:
+                on_status({
+                    "status": "waiting",
+                    "reason": "Shared provider cooldown active",
+                    "wait_sec": round(remaining, 1),
+                    "remaining_tokens": 0,
+                    "limit_tokens": self.limit_tokens,
+                })
+            chunk = min(step, remaining)
+            await asyncio.sleep(chunk)
+            remaining -= chunk
+
+        if on_status:
+            on_status({
+                "status": "ready",
+                "reason": "Shared cooldown cleared",
+                "wait_sec": 0.0,
+                "remaining_tokens": self.get_estimated_remaining(),
+                "limit_tokens": self.limit_tokens,
+            })
+        return round((time.perf_counter() - t_start) * 1000, 1)
 
     def update_from_headers(self, headers: Any):
         """Update live quota state from HTTP response headers."""
@@ -80,6 +201,8 @@ class ProviderRateLimiter:
                 f"[{self.provider}] Rate limiter updated: remaining={self.remaining_tokens}/{self.limit_tokens}, "
                 f"reset={round(self.reset_tokens_sec, 2)}s"
             )
+            if redis_cache.is_enabled:
+                _schedule_bg(self._sync_state_to_redis())
         except Exception as exc:
             logger.warning(f"Error parsing rate limit headers: {exc}")
 
