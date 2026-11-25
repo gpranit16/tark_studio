@@ -479,3 +479,32 @@ async def test_web_search_allows_social_domains_when_explicitly_requested(monkey
     assert len(seen_payloads) == 1
     assert "exclude_domains" not in seen_payloads[0]
     assert len(results) == 2
+
+
+@pytest.mark.asyncio
+async def test_intent_fast_path_skips_llm_for_greetings_code_and_math(monkeypatch):
+    monkeypatch.setattr(settings, "groq_api_key", "test-key")
+    fake_client = MagicMock()
+    fake_client.chat.completions.create = AsyncMock()
+
+    with patch("app.ai.intent._get_pooled_intent_client", return_value=fake_client):
+        for q in ["hi!", "```python\nprint(1)\n```", "2 * 45 + 10"]:
+            dec = await classify_web_intent(q)
+            assert dec.needs_web_search is False
+            assert dec.reason == "fast_path_non_web"
+            assert dec.latency_ms <= 1.0
+
+    fake_client.chat.completions.create.assert_not_called()
+
+
+def test_web_ranker_enforces_domain_diversity_and_keyword_match():
+    items = [
+        WebSearchResult(title="Generic Post 1", url="https://blog.example.com/1", domain="blog.example.com", content="Some summary text with details.", score=0.80),
+        WebSearchResult(title="Generic Post 2", url="https://blog.example.com/2", domain="blog.example.com", content="More text about topic.", score=0.79),
+        WebSearchResult(title="Generic Post 3", url="https://blog.example.com/3", domain="blog.example.com", content="Third post on same site.", score=0.78),
+        WebSearchResult(title="OpenAI Official Release", url="https://openai.com/news", domain="openai.com", content="Latest OpenAI model release details announced today.", score=0.75),
+    ]
+    ranked = WebSearchClient._rank_results(items, "latest OpenAI model release", max_k=3)
+    domains = [r.domain for r in ranked]
+    assert "openai.com" in domains
+    assert domains.count("blog.example.com") == 2

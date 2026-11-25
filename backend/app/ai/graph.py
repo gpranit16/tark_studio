@@ -876,7 +876,7 @@ async def web_agent_node(state: ChatState, writer: StreamWriter) -> dict:
 
     rag_status = {
         "retrieval": "Web Search",
-        "reranker": "ONNX",
+        "reranker": "Web Rank",
         "candidates_count": len(web_results),
         "reranked_count": len(web_results),
         "web_search": True,

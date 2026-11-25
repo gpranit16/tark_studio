@@ -88,6 +88,21 @@ def _build_intent_system_prompt(today_iso: str) -> str:
     )
 
 
+def _is_obvious_non_web_query(query: str) -> bool:
+    """Zero-latency fast path skipping LLM intent check for greetings, code blocks, and pure math."""
+    import re
+    q = (query or "").strip()
+    if not q:
+        return True
+    if "```" in q or "traceback (most recent call last)" in q.lower():
+        return True
+    if re.fullmatch(r"(?i)(hi|hello|hey|yo|thanks|thank you|ok|okay|cool|great|bye|good morning|good night)[!.\s]*", q):
+        return True
+    if re.fullmatch(r"[\d\s+\-*/^=().,%xXyY]+", q) and len(q) <= 40:
+        return True
+    return False
+
+
 async def classify_web_intent(
     query: str,
     recent_turns: Optional[List[dict]] = None,
@@ -101,6 +116,8 @@ async def classify_web_intent(
     cleaned_q = (query or "").strip()
     if not cleaned_q or not settings.groq_api_key:
         return IntentDecision(needs_web_search=False, reason="empty_or_unconfigured")
+    if _is_obvious_non_web_query(cleaned_q):
+        return IntentDecision(needs_web_search=False, reason="fast_path_non_web", latency_ms=0.1)
 
     date_str = today_iso or datetime.now(timezone.utc).strftime("%Y-%m-%d")
 

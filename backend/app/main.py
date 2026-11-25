@@ -74,6 +74,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         import logging
         logging.getLogger("app.startup").warning(f"Redis warmup skipped: {exc}")
 
+    # Startup: Pre-warm pooled intent Groq & Tavily HTTP clients to eliminate cold TLS handshake latency
+    try:
+        from app.ai.intent import _get_pooled_intent_client
+        if settings.groq_api_key:
+            _get_pooled_intent_client()
+        web_search_client._get_http_client()
+    except Exception:
+        pass
+
     yield
     # Shutdown: gracefully await pending background rolling summaries, then dispose of checkpointer, Redis & DB
     try:

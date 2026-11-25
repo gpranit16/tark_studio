@@ -27,7 +27,12 @@ logger = logging.getLogger(__name__)
 TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 _MAX_SNIPPET_CHARS = 1000
 _MIN_CACHEABLE_SCORE = 0.35
-_ESCALATION_SCORE_THRESHOLD = 0.45
+_ESCALATION_SCORE_THRESHOLD = 0.40
+_STOPWORDS = frozenset({
+    "the", "and", "for", "with", "that", "this", "from", "what", "who", "when", "where",
+    "which", "how", "many", "much", "till", "today", "latest", "current", "currently",
+    "tell", "search", "find", "give", "show", "about", "are", "was", "were", "has", "have",
+})
 _SOCIAL_NOISE_DOMAINS = (
     "facebook.com",
     "linkedin.com",
@@ -264,6 +269,50 @@ class WebSearchClient:
                     by_url[norm_url] = item
         return sorted(by_url.values(), key=lambda x: x.score, reverse=True)
 
+    @staticmethod
+    def _rank_results(
+        results: List[WebSearchResult], user_query: str, max_k: int
+    ) -> List[WebSearchResult]:
+        """Fast (<1ms) generalized web ranker combining Tavily score, term coverage, and domain diversity."""
+        if not results:
+            return []
+        tokens = [
+            t for t in re.findall(r"[a-z0-9]{3,}", (user_query or "").lower())
+            if t not in _STOPWORDS
+        ]
+
+        def _rank_key(r: WebSearchResult) -> float:
+            score = float(r.score)
+            if tokens:
+                title_l = (r.title or "").lower()
+                haystack = f"{title_l} {(r.content or '').lower()}"
+                kw_ratio = sum(1 for tok in tokens if tok in haystack) / len(tokens)
+                title_ratio = sum(1 for tok in tokens if tok in title_l) / len(tokens)
+                score += 0.14 * kw_ratio + 0.06 * title_ratio
+            if len(r.content or "") < 120:
+                score -= 0.15
+            dom = (r.domain or "").lower()
+            if dom.endswith((".gov", ".edu")) or "wikipedia.org" in dom or dom.startswith("docs."):
+                score += 0.04
+            return score
+
+        ranked = sorted(results, key=_rank_key, reverse=True)
+        # Keep source diversity: max 2 snippets per domain before filling remaining slots
+        selected: List[WebSearchResult] = []
+        overflow: List[WebSearchResult] = []
+        domain_counts: Dict[str, int] = {}
+        for item in ranked:
+            dom = (item.domain or item.url).lower()
+            cnt = domain_counts.get(dom, 0)
+            if cnt < 2:
+                selected.append(item)
+                domain_counts[dom] = cnt + 1
+            else:
+                overflow.append(item)
+            if len(selected) >= max_k:
+                return selected[:max_k]
+        return (selected + overflow)[:max_k]
+
     async def search(
         self,
         queries: List[str],
@@ -279,7 +328,7 @@ class WebSearchClient:
             return [], 0.0
 
         max_k = max_final_results or int(settings.web_search_max_results or 5)
-        fetch_k = min(10, max_k + 3)
+        fetch_k = max_k if len(clean_queries) > 1 else min(8, max_k + 2)
         exclude_social = _should_exclude_social(user_query)
         batch_lists = await asyncio.gather(
             *(
@@ -307,33 +356,16 @@ class WebSearchClient:
             retry_results = await self._search_single_tavily(
                 clean_queries[0],
                 topic="general",
-                max_results=fetch_k,
+                max_results=max_k,
                 search_depth="advanced",
                 exclude_social=exclude_social,
             )
             if retry_results:
                 merged = self._merge_results([merged, retry_results])
 
-        # Use ONNX Cross-Encoder only when already warm in RAM and >max_k multi-query results need pruning
-        if use_reranker and len(merged) > max_k:
-            try:
-                from app.rag.reranker import _RERANKER_CACHE, get_reranker
-
-                if "onnx" in _RERANKER_CACHE:
-                    reranker = get_reranker("onnx")
-                    candidate_dicts = [{"content": f"{r.title}. {r.content}", "idx": i} for i, r in enumerate(merged)]
-                    reranked = await asyncio.to_thread(reranker.rerank, user_query, candidate_dicts, max_k)
-                    ordered: List[WebSearchResult] = []
-                    for rc in reranked:
-                        orig = merged[int(rc["idx"])]
-                        orig.rerank_score = rc.get("rerank_score")
-                        ordered.append(orig)
-                    merged = ordered
-            except Exception as exc:
-                logger.debug(f"[WebSearch] ONNX snippet filter skipped: {exc}")
-
+        final_results = self._rank_results(merged, user_query, max_k)
         latency_ms = round((time.perf_counter() - t0) * 1000, 1)
-        return merged[:max_k], latency_ms
+        return final_results, latency_ms
 
 
 web_search_client = WebSearchClient()
