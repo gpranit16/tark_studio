@@ -57,7 +57,7 @@ export function CodeBlock({ code, language = 'text' }: CodeBlockProps) {
   };
 
   return (
-    <div className="my-4 rounded-lg border border-[#394336] bg-[#121612] overflow-hidden shadow-md select-text">
+    <div className="my-4 max-w-full min-w-0 rounded-lg border border-[#394336] bg-[#121612] overflow-hidden shadow-md select-text">
       {/* Code Block Header */}
       <div className="flex items-center justify-between px-3.5 py-1.5 bg-[#171C17] border-b border-[#394336] text-xs font-mono select-none">
         <span className="text-[#A5B49A] font-semibold uppercase tracking-wider text-[11px]">

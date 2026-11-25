@@ -23,7 +23,7 @@ export function MarkdownRenderer({ content, onCitationClick }: MarkdownRendererP
   }, [content]);
 
   return (
-    <div className="prose prose-invert max-w-none text-[#F1EEE6] select-text font-sans">
+    <div className="prose prose-invert max-w-none min-w-0 break-words text-[#F1EEE6] select-text font-sans">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{

@@ -83,21 +83,21 @@ export function CitationDrawer({
       {/* Slide-over Drawer Panel */}
       <div className="relative w-full max-w-xl md:max-w-2xl bg-[#171C17] border-l border-[#394336] shadow-[-12px_0_32px_rgba(0,0,0,0.8)] h-full z-10 flex flex-col font-sans">
         {/* Top Header */}
-        <div className="p-4 sm:p-5 border-b border-[#394336] bg-[#121511] flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded bg-[#20271F] border border-[#394336] flex items-center justify-center text-ember-copper shadow-xs">
+        <div className="p-3.5 sm:p-5 border-b border-[#394336] bg-[#121511] flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded bg-[#20271F] border border-[#394336] flex items-center justify-center text-ember-copper shadow-xs flex-shrink-0">
               <BookOpen size={16} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-serif text-lg text-[#F1EEE6] font-normal tracking-wide">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-serif text-base sm:text-lg text-[#F1EEE6] font-normal tracking-wide truncate">
                   Evidence & Grounding
                 </h3>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-[#20271F] text-[#A5B49A] border border-[#394336]">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-[#20271F] text-[#A5B49A] border border-[#394336] flex-shrink-0">
                   <ShieldCheck size={11} className="text-[#A5B49A]" /> Verified
                 </span>
               </div>
-              <p className="text-[11px] font-mono text-[#929B89]">
+              <p className="text-[11px] font-mono text-[#929B89] truncate">
                 Original extracted document passage used for synthesis
               </p>
             </div>
@@ -105,7 +105,7 @@ export function CitationDrawer({
 
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded flex items-center justify-center text-[#929B89] hover:text-[#F1EEE6] hover:bg-[#20271F] border border-transparent hover:border-[#394336] transition-colors cursor-pointer"
+            className="w-8 h-8 rounded flex items-center justify-center text-[#929B89] hover:text-[#F1EEE6] hover:bg-[#20271F] border border-transparent hover:border-[#394336] transition-colors cursor-pointer flex-shrink-0"
             title="Close drawer (Esc)"
           >
             <X size={18} />
@@ -114,7 +114,7 @@ export function CitationDrawer({
 
         {/* Source Navigation Tabs (if multiple citations) */}
         {citations.length > 1 && (
-          <div className="px-5 py-2.5 bg-[#171C17] border-b border-[#394336] flex items-center justify-between gap-2 overflow-x-auto">
+          <div className="px-3.5 sm:px-5 py-2.5 bg-[#171C17] border-b border-[#394336] flex items-center justify-between gap-2 overflow-x-auto">
             <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
               {citations.map((c, idx) => (
                 <button
@@ -156,17 +156,17 @@ export function CitationDrawer({
         )}
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 space-y-4">
           {/* Metadata Card */}
-          <div className="p-4 rounded-lg bg-[#20271F] border border-[#394336] space-y-2.5 shadow-sm">
+          <div className="p-3.5 sm:p-4 rounded-lg bg-[#20271F] border border-[#394336] space-y-2.5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
                 {currentCitation.source_type === 'web' ? (
-                  <Globe size={15} className="text-[#E59A64]" />
+                  <Globe size={15} className="text-[#E59A64] flex-shrink-0" />
                 ) : (
-                  <FileText size={15} className="text-[#E59A64]" />
+                  <FileText size={15} className="text-[#E59A64] flex-shrink-0" />
                 )}
-                <span className="font-mono text-xs font-semibold text-[#F1EEE6] truncate max-w-xs">
+                <span className="font-mono text-xs font-semibold text-[#F1EEE6] truncate max-w-[180px] sm:max-w-xs">
                   {currentCitation.document_name}
                 </span>
               </div>
@@ -237,15 +237,15 @@ export function CitationDrawer({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 sm:p-5 border-t border-[#394336] bg-[#121511] flex items-center justify-between gap-3">
-          <div className="text-[11px] font-mono text-[#929B89]">
+        <div className="p-3.5 sm:p-5 border-t border-[#394336] bg-[#121511] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+          <div className="text-[11px] font-mono text-[#929B89] truncate">
             Source label:{' '}
             <span className="text-[#E59A64] font-semibold">
               {currentCitation.citation_label}
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-end gap-2 flex-shrink-0">
             <button
               onClick={handleCopyExcerpt}
               disabled={!currentCitation.excerpt}

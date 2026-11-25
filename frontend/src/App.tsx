@@ -27,6 +27,7 @@ import {
   Cloud,
   Shield,
   Globe,
+  Menu,
 } from 'lucide-react';
 import { MarkdownRenderer } from './components/MarkdownRenderer';
 import { CitationDrawer } from './components/CitationDrawer';
@@ -261,6 +262,7 @@ export default function App() {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [isDocDrawerOpen, setIsDocDrawerOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   const [selectedReranker, setSelectedReranker] = useState<'onnx' | 'baseline'>('onnx');
   const [webSearchMode, setWebSearchMode] = useState<WebSearchMode>(() => {
@@ -471,6 +473,7 @@ export default function App() {
 
   // Load a specific conversation and all its messages
   const loadConversation = useCallback(async (id: string) => {
+    setIsMobileSidebarOpen(false);
     // Abort any ongoing stream before switching threads
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -601,6 +604,7 @@ export default function App() {
   };
 
   const handleNewChat = () => {
+    setIsMobileSidebarOpen(false);
     if (isGenerating) {
       handleStop();
     }
@@ -1089,11 +1093,24 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen bg-[#10130F] text-[#F1EEE6] font-sans overflow-hidden p-2.5 sm:p-3.5 gap-3.5">
+    <div className="grid grid-cols-1 md:grid-cols-[260px_minmax(0,1fr)] lg:grid-cols-[288px_minmax(0,1fr)] h-[100dvh] w-full bg-[#10130F] text-[#F1EEE6] font-sans overflow-hidden p-0 sm:p-2.5 md:p-3.5 md:gap-3.5 relative">
+      {/* Mobile Sidebar Backdrop */}
+      {isMobileSidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/70 backdrop-blur-xs md:hidden"
+          onClick={() => setIsMobileSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* =========================================================================
-          LEFT SIDEBAR (EMBER SAGE NEO-BRUTALISM)
+          LEFT SIDEBAR (EMBER SAGE NEO-BRUTALISM — RESPONSIVE DRAWER ON MOBILE)
       ========================================================================= */}
-      <aside className="w-64 sm:w-72 flex-shrink-0 bg-[#171C17] border border-[#394336] rounded-xl flex flex-col justify-between p-4 shadow-xl relative select-none">
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-[84vw] max-w-[300px] md:static md:w-64 lg:w-72 flex-shrink-0 bg-[#171C17] border-r md:border border-[#394336] rounded-none md:rounded-xl flex flex-col justify-between p-4 shadow-2xl md:shadow-xl select-none transition-transform duration-200 ease-out ${
+          isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}
+      >
         {/* Corner tech notches */}
         <div className="absolute top-1.5 left-1.5 w-2 h-2 border-t border-l border-ember-copper/50 pointer-events-none" />
         <div className="absolute top-1.5 right-1.5 w-2 h-2 border-t border-r border-ember-copper/50 pointer-events-none" />
@@ -1102,25 +1119,35 @@ export default function App() {
 
         <div className="space-y-4 flex flex-col min-h-0 flex-1">
           {/* Logo & Brand Header */}
-          <div className="flex items-center gap-3 pt-1 px-1 flex-shrink-0">
-            <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M4 3L11 12L4 21H8.5L13.5 14.5L18.5 21H23L16 12L23 3H18.5L13.5 9.5L8.5 3H4Z"
-                  fill="#E59A64"
-                />
-              </svg>
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h1 className="font-sans font-bold text-lg tracking-wider text-[#F1EEE6]">
-                  TARK <span className="font-light text-[#E59A64]">Studio</span>
-                </h1>
+          <div className="flex items-center justify-between gap-2 pt-1 px-1 flex-shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M4 3L11 12L4 21H8.5L13.5 14.5L18.5 21H23L16 12L23 3H18.5L13.5 9.5L8.5 3H4Z"
+                    fill="#E59A64"
+                  />
+                </svg>
               </div>
-              <p className="font-mono text-[10px] text-[#A5B49A] tracking-tight">
-                v0.1.0 • EMBER SAGE
-              </p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h1 className="font-sans font-bold text-lg tracking-wider text-[#F1EEE6] truncate">
+                    TARK <span className="font-light text-[#E59A64]">Studio</span>
+                  </h1>
+                </div>
+                <p className="font-mono text-[10px] text-[#A5B49A] tracking-tight truncate">
+                  v0.1.0 • EMBER SAGE
+                </p>
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(false)}
+              className="md:hidden w-8 h-8 rounded-lg bg-[#20271F] border border-[#394336] text-[#A5B49A] hover:text-[#F1EEE6] flex items-center justify-center cursor-pointer flex-shrink-0"
+              aria-label="Close sidebar"
+            >
+              <X size={16} />
+            </button>
           </div>
 
           {/* + New Chat CTA */}
@@ -1154,7 +1181,10 @@ export default function App() {
 
               {/* RAG Documents Drawer Button */}
               <button
-                onClick={() => setIsDocDrawerOpen(true)}
+                onClick={() => {
+                  setIsMobileSidebarOpen(false);
+                  setIsDocDrawerOpen(true);
+                }}
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md bg-[#171C17] border border-[#394336] hover:border-ember-copper text-[#B7BDAE] hover:text-[#F1EEE6] font-medium transition-colors cursor-pointer text-left"
               >
                 <BookOpen size={15} className="text-[#A5B49A]" />
@@ -1316,14 +1346,14 @@ export default function App() {
 
                       <div className="flex items-center gap-1 flex-shrink-0">
                         {/* Message count badge */}
-                        <span className="font-mono text-[10px] text-[#929B89] group-hover:hidden">
+                        <span className="font-mono text-[10px] text-[#929B89] hidden md:inline md:group-hover:hidden">
                           {conv.message_count}m
                         </span>
 
-                        {/* Quick actions on hover */}
+                        {/* Quick actions: always accessible on touch devices, hover-revealed on desktop */}
                         <button
                           onClick={(e) => handleStartRename(e, conv)}
-                          className="hidden group-hover:flex p-1 text-[#929B89] hover:text-[#E59A64] hover:bg-[#20271F] rounded cursor-pointer"
+                          className="flex md:hidden md:group-hover:flex p-1 text-[#929B89] hover:text-[#E59A64] hover:bg-[#20271F] rounded cursor-pointer"
                           title="Rename"
                         >
                           <Edit2 size={12} />
@@ -1333,7 +1363,7 @@ export default function App() {
                         {viewTab === 'active' ? (
                           <button
                             onClick={(e) => handleArchiveConversation(e, conv.id)}
-                            className="hidden group-hover:flex p-1 text-[#929B89] hover:text-[#A5B49A] hover:bg-[#20271F] rounded cursor-pointer"
+                            className="flex md:hidden md:group-hover:flex p-1 text-[#929B89] hover:text-[#A5B49A] hover:bg-[#20271F] rounded cursor-pointer"
                             title="Archive conversation"
                           >
                             <Archive size={12} />
@@ -1341,7 +1371,7 @@ export default function App() {
                         ) : (
                           <button
                             onClick={(e) => handleUnarchiveConversation(e, conv.id)}
-                            className="hidden group-hover:flex p-1 text-[#929B89] hover:text-[#A5B49A] hover:bg-[#20271F] rounded cursor-pointer"
+                            className="flex md:hidden md:group-hover:flex p-1 text-[#929B89] hover:text-[#A5B49A] hover:bg-[#20271F] rounded cursor-pointer"
                             title="Unarchive conversation"
                           >
                             <ArchiveRestore size={12} />
@@ -1351,7 +1381,7 @@ export default function App() {
                         {/* Delete */}
                         <button
                           onClick={(e) => handleDeleteConversation(e, conv.id)}
-                          className="hidden group-hover:flex p-1 text-[#929B89] hover:text-red-400 hover:bg-[#20271F] rounded cursor-pointer"
+                          className="flex md:hidden md:group-hover:flex p-1 text-[#929B89] hover:text-red-400 hover:bg-[#20271F] rounded cursor-pointer"
                           title="Delete"
                         >
                           <Trash2 size={12} />
@@ -1420,7 +1450,7 @@ export default function App() {
       {/* =========================================================================
           MAIN CHAT WORKSPACE (CINEMATIC MOUNTAIN WALLPAPER + CLEAN RENDERING)
       ========================================================================= */}
-      <section className="flex-1 flex flex-col justify-between h-full overflow-hidden border border-[#394336] rounded-xl relative bg-[#10130F] shadow-2xl">
+      <section className="flex-1 min-w-0 flex flex-col justify-between h-full overflow-hidden border-0 sm:border border-[#394336] rounded-none sm:rounded-xl relative bg-[#10130F] shadow-2xl">
         {/* Background Wallpaper: Mountains & Glowing Copper Sun */}
         <div
           className="absolute inset-0 bg-cover bg-center pointer-events-none opacity-65"
@@ -1431,17 +1461,27 @@ export default function App() {
         <div className="absolute inset-0 bg-gradient-to-t from-[#10130F]/50 via-transparent to-[#10130F]/40 pointer-events-none" />
 
         {/* =========================================================================
-            TOP CONTROL BAR (DUAL-ENGINE SWITCHER & SEGMENTED MODEL PICKER)
+            TOP CONTROL BAR (RESPONSIVE GRID ON MOBILE/TABLET, FLEX ON DESKTOP)
         ========================================================================= */}
-        <header className="h-16 px-6 flex items-center justify-between z-10 border-b border-[#394336]/60 backdrop-blur-md flex-shrink-0 select-none">
-          {/* Left: Dual Engine Switcher & Model Selector */}
-          <div className="flex items-center gap-3">
+        <header className="px-3 sm:px-5 lg:px-6 py-2 sm:py-2.5 grid grid-cols-[minmax(0,1fr)_auto] lg:flex lg:items-center lg:justify-between gap-2 sm:gap-3 z-10 border-b border-[#394336]/60 backdrop-blur-md flex-shrink-0 select-none">
+          {/* Cell 1: Mobile Menu + Dual-Engine Switcher */}
+          <div className="flex items-center gap-2 min-w-0 lg:order-1 lg:flex-shrink-0">
+            {/* Mobile Sidebar Drawer Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="md:hidden w-8 h-8 rounded-lg bg-[#171C17]/95 border border-[#394336] text-[#F1EEE6] hover:border-ember-copper flex items-center justify-center flex-shrink-0 cursor-pointer"
+              aria-label="Open sidebar"
+            >
+              <Menu size={16} />
+            </button>
+
             {/* Dual-Engine Mode Toggle */}
-            <div className="flex items-center bg-[#171C17]/95 border border-[#394336] p-0.5 rounded-lg text-xs font-mono">
+            <div className="flex items-center bg-[#171C17]/95 border border-[#394336] p-0.5 rounded-lg text-[11px] sm:text-xs font-mono flex-shrink-0">
               <button
                 type="button"
                 onClick={() => handleSwitchEngine('cloud')}
-                className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-2 sm:px-2.5 py-1 rounded-md transition-all flex items-center gap-1 sm:gap-1.5 cursor-pointer ${
                   engineMode === 'cloud'
                     ? 'bg-ember-copper/20 text-ember-copper border border-ember-copper/40 font-semibold shadow-sm'
                     : 'text-[#929B89] hover:text-[#F1EEE6]'
@@ -1449,12 +1489,13 @@ export default function App() {
                 title="Cloud Mode: High-throughput Groq LPU inference (Zero Setup)"
               >
                 <Cloud size={12} />
+                <span className="sm:hidden">Cloud</span>
                 <span className="hidden sm:inline">Cloud LPU</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleSwitchEngine('local')}
-                className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-2 sm:px-2.5 py-1 rounded-md transition-all flex items-center gap-1 sm:gap-1.5 cursor-pointer ${
                   engineMode === 'local'
                     ? 'bg-emerald-950/70 text-emerald-400 border border-emerald-500/50 font-semibold shadow-sm'
                     : 'text-[#929B89] hover:text-[#F1EEE6]'
@@ -1462,20 +1503,66 @@ export default function App() {
                 title="Air-Gapped Private Mode: RTX 3050 Laptop GPU (0 Bytes Cloud Egress)"
               >
                 <Shield size={12} className={engineMode === 'local' ? 'text-emerald-400' : ''} />
-                <span>Local RTX 3050</span>
+                <span className="sm:hidden">Local</span>
+                <span className="hidden sm:inline">Local RTX 3050</span>
               </button>
             </div>
+          </div>
 
-            {/* Model Selector filtered by active engine */}
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-xs font-semibold text-[#A5B49A] tracking-wider hidden lg:inline">
+          {/* Cell 2: Telemetry & Engine Status Indicator (Always visible, never clipped) */}
+          <div className="flex items-center justify-end gap-2 sm:gap-3 flex-shrink-0 lg:order-3">
+            <div className="hidden xl:flex items-center gap-2 px-3 py-1 rounded-md bg-[#171C17]/80 border border-[#394336] font-mono text-xs text-[#A5B49A]">
+              <Zap size={13} className="text-ember-copper" />
+              <span>{engineMode === 'local' ? 'RTX 3050 CUDA' : 'LangGraph + PG Checkpoint'}</span>
+            </div>
+
+            <div
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-md border text-[11px] sm:text-xs font-mono transition-colors whitespace-nowrap ${
+                engineMode === 'local'
+                  ? health?.status === 'healthy'
+                    ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                    : 'bg-amber-950/40 border-amber-500/40 text-amber-300'
+                  : 'bg-[#20271F] border-[#394336] text-[#F1EEE6]'
+              }`}
+            >
+              {engineMode === 'local' ? (
+                health?.status === 'healthy' ? (
+                  <>
+                    <Shield size={12} className="text-emerald-400 flex-shrink-0" />
+                    <span className="hidden sm:inline">0B Egress (127.0.0.1:8000)</span>
+                    <span className="sm:hidden">0B Local</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-amber-400 inline-block animate-pulse flex-shrink-0" />
+                    <span className="hidden sm:inline">Local Offline (run python run.py)</span>
+                    <span className="sm:hidden">Offline</span>
+                  </>
+                )
+              ) : (
+                <>
+                  <span
+                    className={`w-2 h-2 rounded-full inline-block flex-shrink-0 ${
+                      health ? 'bg-emerald-500' : 'bg-red-500'
+                    }`}
+                  />
+                  <span>{sysStatus.apiStatus}</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Cell 3: Model Selector + Session Badge (Full-width row on < lg, inline on lg+) */}
+          <div className="col-span-2 lg:col-span-1 lg:order-2 flex items-center gap-2.5 min-w-0 lg:flex-1">
+            <div className="flex items-center gap-2 min-w-0 flex-1 lg:flex-initial">
+              <span className="font-mono text-xs font-semibold text-[#A5B49A] tracking-wider hidden lg:inline flex-shrink-0">
                 MODEL:
               </span>
-              <div className="relative">
+              <div className="relative min-w-0 w-full lg:w-auto">
                 <select
                   value={selectedModel}
                   onChange={(e) => setSelectedModel(e.target.value)}
-                  className="bg-[#171C17]/95 border border-[#394336] text-[#F1EEE6] font-mono text-xs py-1.5 pl-3 pr-8 rounded-lg hover:border-[#A5B49A] transition-colors cursor-pointer focus:outline-none"
+                  className="w-full lg:w-auto lg:max-w-[240px] truncate bg-[#171C17]/95 border border-[#394336] text-[#F1EEE6] font-mono text-xs py-1.5 pl-3 pr-7 rounded-lg hover:border-[#A5B49A] transition-colors cursor-pointer focus:outline-none"
                 >
                   {displayModels.map((m) => (
                     <option key={m.id} value={m.id} className="bg-[#171C17] text-[#F1EEE6]">
@@ -1487,13 +1574,13 @@ export default function App() {
             </div>
 
             {/* Active Session Badge & Smart Title Button */}
-            <div className="hidden xl:flex items-center gap-2 px-3 py-1 bg-[#171C17]/80 border border-[#394336] rounded-md font-mono text-xs text-[#A5B49A]">
-              <span className="w-1.5 h-1.5 rounded-full bg-ember-copper inline-block" />
+            <div className="hidden xl:flex items-center gap-2 px-3 py-1 bg-[#171C17]/80 border border-[#394336] rounded-md font-mono text-xs text-[#A5B49A] min-w-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-ember-copper inline-block flex-shrink-0" />
               <span className="text-[#F1EEE6] font-medium truncate max-w-xs">{sessionTitle}</span>
               {activeConversationId && (
                 <button
                   onClick={() => handleGenerateTitle()}
-                  className="ml-1 text-[#929B89] hover:text-ember-copper transition-colors cursor-pointer"
+                  className="ml-1 text-[#929B89] hover:text-ember-copper transition-colors cursor-pointer flex-shrink-0"
                   title="Generate meaningful title via LangGraph"
                 >
                   <Sparkles size={12} />
@@ -1501,52 +1588,11 @@ export default function App() {
               )}
             </div>
           </div>
-
-          {/* Right: Telemetry & Engine Status Indicator */}
-          <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-md bg-[#171C17]/80 border border-[#394336] font-mono text-xs text-[#A5B49A]">
-              <Zap size={13} className="text-ember-copper" />
-              <span>{engineMode === 'local' ? 'RTX 3050 CUDA' : 'LangGraph + PG Checkpoint'}</span>
-            </div>
-
-            <div
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-md border text-xs font-mono transition-colors ${
-                engineMode === 'local'
-                  ? health?.status === 'healthy'
-                    ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
-                    : 'bg-amber-950/40 border-amber-500/40 text-amber-300'
-                  : 'bg-[#20271F] border-[#394336] text-[#F1EEE6]'
-              }`}
-            >
-              {engineMode === 'local' ? (
-                health?.status === 'healthy' ? (
-                  <>
-                    <Shield size={12} className="text-emerald-400" />
-                    <span>0B Egress (127.0.0.1:8000)</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-amber-400 inline-block animate-pulse" />
-                    <span>Local Offline (run python run.py)</span>
-                  </>
-                )
-              ) : (
-                <>
-                  <span
-                    className={`w-2 h-2 rounded-full inline-block ${
-                      health ? 'bg-emerald-500' : 'bg-red-500'
-                    }`}
-                  />
-                  <span>{sysStatus.apiStatus}</span>
-                </>
-              )}
-            </div>
-          </div>
         </header>
 
         {/* Global Error Alert Banner */}
         {globalError && (
-          <div className="mx-6 mt-3 p-3 bg-red-950/80 border border-red-500/80 rounded-lg flex items-center justify-between text-xs text-red-200 z-20 shadow-lg">
+          <div className="mx-3 sm:mx-6 mt-3 p-3 bg-red-950/80 border border-red-500/80 rounded-lg flex items-center justify-between gap-2 text-xs text-red-200 z-20 shadow-lg">
             <div className="flex items-center gap-2">
               <AlertCircle size={15} className="text-red-400 flex-shrink-0" />
               <span>{globalError}</span>
@@ -1563,7 +1609,7 @@ export default function App() {
         {/* =========================================================================
             CHAT MESSAGE STREAM SCROLLABLE VIEWPORT
         ========================================================================= */}
-        <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 z-10 space-y-6">
+        <div className="flex-1 overflow-y-auto px-3 sm:px-6 md:px-8 py-4 sm:py-6 z-10 space-y-5 sm:space-y-6">
           {isLoadingMessages ? (
             /* Loading Conversation Thread State */
             <div className="h-full flex items-center justify-center">
@@ -1574,14 +1620,14 @@ export default function App() {
             </div>
           ) : messages.length === 0 ? (
             /* Empty State Hero Banner */
-            <div className="h-full flex flex-col items-center justify-center text-center max-w-xl mx-auto py-12">
-              <div className="w-14 h-14 rounded-2xl bg-[#20271F]/90 border border-[#394336] flex items-center justify-center text-ember-copper mb-5 shadow-[4px_4px_0px_0px_#A5B49A]">
-                <Sparkles size={28} />
+            <div className="min-h-full flex flex-col items-center justify-center text-center max-w-xl mx-auto py-6 sm:py-12 px-1">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[#20271F]/90 border border-[#394336] flex items-center justify-center text-ember-copper mb-4 sm:mb-5 shadow-[4px_4px_0px_0px_#A5B49A]">
+                <Sparkles size={24} />
               </div>
-              <h2 className="font-serif text-3xl sm:text-4xl font-normal text-[#F1EEE6] tracking-wide mb-3">
+              <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-normal text-[#F1EEE6] tracking-wide mb-2.5 sm:mb-3">
                 Industrial Intelligence Workspace
               </h2>
-              <p className="font-sans text-sm text-[#B7BDAE] max-w-md mb-8 leading-relaxed">
+              <p className="font-sans text-xs sm:text-sm text-[#B7BDAE] max-w-md mb-6 sm:mb-8 leading-relaxed">
                 Persistent AI conversations powered by LangGraph, PostgreSQL checkpoints, and high-throughput Groq inference.
               </p>
 
@@ -1611,13 +1657,13 @@ export default function App() {
                 return (
                   <div
                     key={msg.id}
-                    className={`flex items-start gap-3.5 ${
+                    className={`flex items-start gap-2 sm:gap-3.5 ${
                       isUser ? 'flex-row-reverse' : 'flex-row'
                     }`}
                   >
                     {/* Role Avatar */}
                     <div
-                      className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 font-mono text-xs font-bold border ${
+                      className={`w-7 h-7 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-shrink-0 font-mono text-[11px] sm:text-xs font-bold border ${
                         isUser
                           ? 'bg-[#20271F] border-[#394336] text-ember-copper shadow-sm'
                           : 'bg-[#E59A64] border-[#E59A64] text-[#10130F] shadow-[2px_2px_0px_0px_#A5B49A]'
@@ -1626,7 +1672,7 @@ export default function App() {
                       {isUser ? (
                         'U'
                       ) : (
-                        <Sparkles size={16} fill="currentColor" strokeWidth={1} />
+                        <Sparkles size={15} fill="currentColor" strokeWidth={1} />
                       )}
                     </div>
 
@@ -1634,10 +1680,10 @@ export default function App() {
                     <div
                       data-role={msg.role}
                       data-testid={`message-${msg.role}`}
-                      className="flex-1 max-w-[85%] sm:max-w-[78%]"
+                      className="flex-1 min-w-0 max-w-[89%] sm:max-w-[82%] md:max-w-[78%]"
                     >
                       <div
-                        className={`p-4 sm:p-5 rounded-lg border text-sm leading-relaxed ${
+                        className={`p-3 sm:p-4 md:p-5 rounded-lg border text-sm leading-relaxed overflow-hidden ${
                           isUser
                             ? 'bg-[#171C17]/95 border-[#394336] text-[#F1EEE6] shadow-[3px_3px_0px_0px_#A5B49A]'
                             : 'bg-[#171C17]/95 border-[#394336] text-[#F1EEE6] shadow-[4px_4px_0px_0px_#E59A64]'
@@ -1738,7 +1784,7 @@ export default function App() {
                           <div className="mt-3 pt-2.5 border-t border-[#394336]/60 flex flex-col gap-1.5">
                             {/* Tier 1: Frontend User Experience (Actual Client Wall-Clock Time) */}
                             <div className="flex items-center gap-2 flex-wrap">
-                              <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-[#10130F] border border-[#394336] text-[10px] font-mono shadow-xs">
+                              <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 max-w-full px-2.5 py-1 rounded bg-[#10130F] border border-[#394336] text-[10px] font-mono shadow-xs">
                                 <span className="text-[#929B89] flex items-center gap-1">
                                   <Zap size={11} className="text-ember-copper" />
                                   <span>Client E2E:</span>
@@ -1764,7 +1810,7 @@ export default function App() {
 
                               {/* RAG Candidate Pill (if RAG is active) */}
                               {msg.ragStatus && (
-                                <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-[#10130F] border border-[#394336] text-[10px] font-mono shadow-xs">
+                                <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 max-w-full px-2.5 py-1 rounded bg-[#10130F] border border-[#394336] text-[10px] font-mono shadow-xs">
                                   <span className="text-[#929B89]">Retrieval: <span className="text-[#A5B49A] font-semibold">{msg.ragStatus.retrieval}</span></span>
                                   <span className="text-[#394336]">•</span>
                                   <span className="text-[#929B89]">Reranker: <span className={msg.ragStatus.reranker === 'OFF' ? 'text-[#929B89]' : 'text-ember-copper font-semibold'}>{msg.ragStatus.reranker}</span></span>
@@ -1884,12 +1930,12 @@ export default function App() {
                         {/* Verified Grounded Sources Badges */}
                         {isAssistant && msg.citations && msg.citations.length > 0 && (
                           <div className={`pt-2.5 ${msg.ragStatus ? 'mt-1' : 'mt-3 border-t border-[#394336]/60'}`}>
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <BookOpen size={13} className="text-ember-copper" />
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5">
+                              <BookOpen size={13} className="text-ember-copper flex-shrink-0" />
                               <span className="font-mono text-[10px] text-[#A5B49A] font-semibold tracking-wider uppercase">
                                 Verified Sources ({msg.citations.length})
                               </span>
-                              <span className="text-[10px] font-mono text-[#929B89]">
+                              <span className="hidden sm:inline text-[10px] font-mono text-[#929B89]">
                                 • Click badge to inspect source passage
                               </span>
                             </div>
@@ -1919,7 +1965,7 @@ export default function App() {
                                       ) : (
                                         <FileText size={11} className="text-[#A5B49A] group-hover:text-ember-copper transition-colors" />
                                       )}
-                                      <span className="max-w-[220px] truncate">{cite.citation_label}</span>
+                                      <span className="max-w-[175px] sm:max-w-[220px] truncate">{cite.citation_label}</span>
                                       {!isWeb && (
                                         <span className="text-[10px] text-[#A5B49A] opacity-70 group-hover:opacity-100">↗</span>
                                       )}
@@ -1944,8 +1990,8 @@ export default function App() {
 
                         {/* Assistant Message Footer Metadata & Actions */}
                         {isAssistant && msg.content && (
-                          <div className="mt-4 pt-2.5 border-t border-[#394336]/60 flex items-center justify-between text-[11px] font-mono text-[#A5B49A]">
-                            <div className="flex items-center gap-3">
+                          <div className="mt-4 pt-2.5 border-t border-[#394336]/60 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-[#A5B49A]">
+                            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                               {msg.latencyMs && (
                                 <span className="flex items-center gap-1">
                                   <Zap size={11} className="text-ember-copper" />
@@ -2014,7 +2060,7 @@ export default function App() {
         {/* =========================================================================
             BOTTOM FLOATING COMPOSER DOCK (ChatGPT-Style Inline Attachments)
         ========================================================================= */}
-        <footer className="p-4 sm:p-6 z-20 flex-shrink-0 select-none">
+        <footer className="p-2.5 sm:p-4 md:p-6 z-20 flex-shrink-0 select-none">
           <div className="max-w-4xl mx-auto">
             {/* Dock Container with 3D Copper Block Shadow */}
             <div
@@ -2093,7 +2139,7 @@ export default function App() {
                   )}
 
                   {/* Reranker Mode Selector */}
-                  <div className="ml-auto flex items-center gap-1.5 font-mono text-[10px]">
+                  <div className="w-full sm:w-auto sm:ml-auto flex items-center justify-between sm:justify-end gap-1.5 font-mono text-[10px]">
                     <span className="text-[#929B89]">Reranker:</span>
                     {(['onnx', 'baseline'] as const).map((r) => (
                       <button
@@ -2119,7 +2165,7 @@ export default function App() {
               )}
 
               {/* Main Input Controls Row */}
-              <div className="flex items-center gap-3 px-3.5 py-2.5">
+              <div className="flex items-center gap-2 sm:gap-3 px-2.5 sm:px-3.5 py-2 sm:py-2.5">
                 {/* Attachment Paperclip Button (Direct File Chooser like ChatGPT) */}
                 <button
                   onClick={() => fileInputRef.current?.click()}
@@ -2164,7 +2210,7 @@ export default function App() {
                       disabled={isWebLocked}
                       title={titleText}
                       data-testid="web-search-toggle"
-                      className={`h-9 px-2.5 rounded-lg border flex items-center gap-1.5 font-mono text-[11px] transition-all flex-shrink-0 ${
+                      className={`h-9 px-2 sm:px-2.5 rounded-lg border flex items-center gap-1 sm:gap-1.5 font-mono text-[10px] sm:text-[11px] transition-all flex-shrink-0 ${
                         isWebLocked
                           ? 'bg-[#10130F] border-[#394336]/60 text-[#929B89]/60 cursor-not-allowed'
                           : effectiveMode === 'on'
@@ -2175,7 +2221,7 @@ export default function App() {
                       }`}
                     >
                       <Globe size={14} />
-                      <span className="hidden sm:inline">{modeLabel}</span>
+                      <span>{modeLabel}</span>
                     </button>
                   );
                 })()}
@@ -2192,7 +2238,7 @@ export default function App() {
                       : 'Ask Groq anything...'
                   }
                   rows={1}
-                  className="flex-1 bg-transparent resize-none text-sm text-[#F1EEE6] placeholder:text-[#929B89] focus:outline-none py-1 max-h-32 font-sans select-text"
+                  className="flex-1 min-w-0 bg-transparent resize-none text-sm text-[#F1EEE6] placeholder:text-[#929B89] focus:outline-none py-1 max-h-32 font-sans select-text"
                 />
 
                 {/* Shift + Enter Hint */}
@@ -2243,24 +2289,24 @@ export default function App() {
           DOCUMENT INTELLIGENCE (RAG) DRAWER / MODAL
       ========================================================================= */}
       {isDocDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-          <div className="w-full max-w-2xl bg-[#171C17] border border-[#394336] rounded-xl shadow-[8px_8px_0px_0px_#E59A64] flex flex-col max-h-[85vh] overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-2.5 sm:p-4">
+          <div className="w-full max-w-2xl bg-[#171C17] border border-[#394336] rounded-xl shadow-[6px_6px_0px_0px_#E59A64] sm:shadow-[8px_8px_0px_0px_#E59A64] flex flex-col max-h-[92dvh] sm:max-h-[85vh] overflow-hidden">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-[#394336] bg-[#10130F]">
-              <div className="flex items-center gap-2.5">
-                <BookOpen size={20} className="text-[#E59A64]" />
-                <div>
-                  <h3 className="font-sans font-bold text-base text-[#F1EEE6] tracking-wide">
+            <div className="flex items-center justify-between gap-2 p-4 sm:p-5 border-b border-[#394336] bg-[#10130F]">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <BookOpen size={20} className="text-[#E59A64] flex-shrink-0" />
+                <div className="min-w-0">
+                  <h3 className="font-sans font-bold text-sm sm:text-base text-[#F1EEE6] tracking-wide truncate">
                     Document Intelligence & RAG
                   </h3>
-                  <p className="font-mono text-xs text-[#A5B49A]">
+                  <p className="font-mono text-[11px] sm:text-xs text-[#A5B49A] truncate">
                     Vector Embeddings (768d nomic-embed-text) + PostgreSQL Full-Text Search
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setIsDocDrawerOpen(false)}
-                className="w-8 h-8 rounded-lg bg-[#20271F] border border-[#394336] text-[#A5B49A] hover:text-[#F1EEE6] flex items-center justify-center cursor-pointer transition-colors"
+                className="w-8 h-8 rounded-lg bg-[#20271F] border border-[#394336] text-[#A5B49A] hover:text-[#F1EEE6] flex items-center justify-center cursor-pointer transition-colors flex-shrink-0"
               >
                 <X size={16} />
               </button>
@@ -2297,9 +2343,9 @@ export default function App() {
 
               {/* Ingested Documents List */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs font-mono text-[#A5B49A] px-1">
+                <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] sm:text-xs font-mono text-[#A5B49A] px-1">
                   <span>INGESTED DOCUMENTS ({documents.length})</span>
-                  <span>SELECT TO GROUND CHAT</span>
+                  <span className="hidden sm:inline">SELECT TO GROUND CHAT</span>
                 </div>
 
                 {documents.length === 0 ? (
@@ -2316,7 +2362,7 @@ export default function App() {
                       return (
                         <div
                           key={doc.id}
-                          className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 ${
+                          className={`p-3 rounded-lg border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 ${
                             isSelected
                               ? 'bg-[#20271F] border-ember-copper shadow-sm'
                               : 'bg-[#10130F] border-[#394336] hover:border-[#A5B49A]/50'
@@ -2343,7 +2389,7 @@ export default function App() {
                                   {doc.file_type}
                                 </span>
                               </div>
-                              <div className="flex items-center gap-3 text-xs font-mono text-[#929B89] mt-0.5">
+                              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs font-mono text-[#929B89] mt-0.5">
                                 <span>{doc.page_count} pages</span>
                                 <span>•</span>
                                 <span>{doc.chunk_count} chunks</span>
@@ -2398,7 +2444,7 @@ export default function App() {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-[#394336] bg-[#10130F] flex items-center justify-between font-mono text-xs">
+            <div className="p-4 border-t border-[#394336] bg-[#10130F] flex flex-wrap items-center justify-between gap-2 font-mono text-xs">
               <span className="text-[#A5B49A]">
                 {selectedDocIds.length} document{selectedDocIds.length !== 1 ? 's' : ''} selected for chat grounding
               </span>
