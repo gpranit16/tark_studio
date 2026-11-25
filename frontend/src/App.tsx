@@ -24,10 +24,10 @@ import {
   UploadCloud,
   CheckSquare,
   BookOpen,
-  Cloud,
   Shield,
   Globe,
   Menu,
+  ChevronDown,
 } from 'lucide-react';
 import { MarkdownRenderer } from './components/MarkdownRenderer';
 import { CitationDrawer } from './components/CitationDrawer';
@@ -1107,16 +1107,10 @@ export default function App() {
           LEFT SIDEBAR (EMBER SAGE NEO-BRUTALISM — RESPONSIVE DRAWER ON MOBILE)
       ========================================================================= */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-[84vw] max-w-[300px] md:static md:relative md:w-full md:max-w-none h-full min-h-0 overflow-hidden flex-shrink-0 bg-[#171C17] border-r md:border border-[#394336] rounded-none md:rounded-xl flex flex-col justify-between p-4 shadow-2xl md:shadow-xl select-none transition-transform duration-200 ease-out ${
+        className={`fixed inset-y-0 left-0 z-40 w-[84vw] max-w-[300px] md:static md:relative md:w-full md:max-w-none h-full min-h-0 overflow-hidden flex-shrink-0 bg-[#141813] border-r md:border border-[#2C3529] rounded-none md:rounded-xl flex flex-col justify-between p-4 shadow-2xl md:shadow-xl select-none transition-transform duration-200 ease-out ${
           isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
-        {/* Corner tech notches */}
-        <div className="absolute top-1.5 left-1.5 w-2 h-2 border-t border-l border-ember-copper/50 pointer-events-none" />
-        <div className="absolute top-1.5 right-1.5 w-2 h-2 border-t border-r border-ember-copper/50 pointer-events-none" />
-        <div className="absolute bottom-1.5 left-1.5 w-2 h-2 border-b border-l border-ember-copper/50 pointer-events-none" />
-        <div className="absolute bottom-1.5 right-1.5 w-2 h-2 border-b border-r border-ember-copper/50 pointer-events-none" />
-
         <div className="space-y-4 flex flex-col min-h-0 flex-1">
           {/* Logo & Brand Header */}
           <div className="flex items-center justify-between gap-2 pt-1 px-1 flex-shrink-0">
@@ -1153,28 +1147,24 @@ export default function App() {
           {/* + New Chat CTA */}
           <button
             onClick={handleNewChat}
-            className="w-full py-2.5 px-4 bg-[#E59A64] hover:bg-[#F0AB78] text-[#10130F] font-semibold text-sm rounded-lg flex items-center justify-center gap-2 shadow-[2px_2px_0px_0px_#A5B49A] active:translate-x-[1px] active:translate-y-[1px] transition-all cursor-pointer flex-shrink-0"
+            className="w-full py-2.5 px-4 bg-[#E59A64] hover:bg-[#F0AB78] text-[#10130F] font-semibold text-sm rounded-lg flex items-center justify-center gap-2 border border-[#F0AB78]/40 shadow-[2px_2px_0px_0px_#A5B49A] active:translate-x-[1px] active:translate-y-[1px] transition-all cursor-pointer flex-shrink-0"
           >
             <Plus size={18} strokeWidth={2.5} />
             <span className="tracking-wide">New Chat</span>
           </button>
 
           {/* SECTION: WORKSPACE NAVIGATION */}
-          <div className="space-y-1 pt-1 flex-shrink-0">
-            <div className="flex items-center justify-between text-[11px] font-mono font-medium px-1.5">
-              <span className="flex items-center gap-1 text-[#A5B49A]">
-                <span className="text-ember-copper text-[10px]">▸</span> WORKSPACE
-              </span>
-              <span className="text-ember-copper font-mono font-bold tracking-tighter text-xs">
-                /////
-              </span>
+          <div className="space-y-1.5 pt-1 flex-shrink-0">
+            <div className="text-[10px] font-mono font-medium tracking-[0.14em] uppercase text-[#8C9684] px-1.5">
+              Workspace
             </div>
 
             <nav className="space-y-1 text-xs">
-              <div className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md bg-[#20271F] border border-[#A5B49A]/80 text-[#F1EEE6] font-medium shadow-sm">
-                <MessageSquare size={15} className="text-ember-copper" />
-                <span className="flex-1">AI Chat Workspace</span>
-                <span className="text-[10px] font-mono text-[#A5B49A] bg-[#10130F] px-1.5 py-0.5 rounded border border-[#394336]">
+              <div className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[#20271F] border border-[#3E4B3A] border-l-2 border-l-[#E59A64] text-[#F1EEE6] font-medium">
+                <MessageSquare size={15} className="text-ember-copper flex-shrink-0" />
+                <span className="flex-1 truncate">AI Chat Workspace</span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-mono text-emerald-400 flex-shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                   Active
                 </span>
               </div>
@@ -1185,11 +1175,11 @@ export default function App() {
                   setIsMobileSidebarOpen(false);
                   setIsDocDrawerOpen(true);
                 }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md bg-[#171C17] border border-[#394336] hover:border-ember-copper text-[#B7BDAE] hover:text-[#F1EEE6] font-medium transition-colors cursor-pointer text-left"
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[#141813] border border-[#2C3529] hover:border-[#A5B49A]/70 text-[#B7BDAE] hover:text-[#F1EEE6] font-medium transition-colors cursor-pointer text-left"
               >
                 <BookOpen size={15} className="text-[#A5B49A]" />
                 <span className="flex-1">Documents (RAG)</span>
-                <span className="text-[10px] font-mono text-[#E59A64] bg-[#20271F] px-1.5 py-0.5 rounded border border-[#394336]">
+                <span className="text-[10px] font-mono text-[#E59A64] bg-[#1C221B] px-1.5 py-0.5 rounded border border-[#2C3529]">
                   {documents.length} Doc{documents.length !== 1 ? 's' : ''}
                 </span>
               </button>
@@ -1198,13 +1188,9 @@ export default function App() {
 
           {/* SECTION: RECENT CHATS (POSTGRESQL PERSISTENT THREADS) */}
           <div className="flex-1 flex flex-col min-h-0 pt-1 space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-mono font-medium px-1.5 flex-shrink-0">
-              <span className="flex items-center gap-1 text-[#A5B49A]">
-                <span className="text-ember-copper text-[10px]">▸</span> RECENT CHATS ({conversations.length})
-              </span>
-              <span className="text-ember-copper font-mono font-bold tracking-tighter text-xs">
-                /////
-              </span>
+            <div className="flex items-center justify-between text-[10px] font-mono font-medium tracking-[0.14em] uppercase text-[#8C9684] px-1.5 flex-shrink-0">
+              <span>Recent Chats</span>
+              <span className="text-[#A5B49A] tabular-nums">{conversations.length}</span>
             </div>
 
             {/* View Tabs: Active vs Archived */}
@@ -1261,7 +1247,7 @@ export default function App() {
                   <div className="h-9 rounded-md bg-[#20271F]/30 animate-pulse border border-[#394336]/20" />
                 </div>
               ) : conversations.length === 0 ? (
-                <div className="p-3 text-center rounded-lg border border-dashed border-[#394336] bg-[#10130F]/40 text-[#929B89] text-[11px] font-mono space-y-1">
+                <div className="py-6 px-3 text-center text-[#8C9684] text-[11px] font-mono space-y-1">
                   {searchQuery ? (
                     <>
                       <p>No chats matching "{searchQuery}"</p>
@@ -1396,52 +1382,59 @@ export default function App() {
         </div>
 
         {/* SECTION: INFERENCE ENGINE & DATABASE PERSISTENCE STATUS */}
-        <div className="pt-3 border-t border-[#394336] space-y-2 flex-shrink-0">
-          <div className="flex items-center justify-between text-[11px] font-mono font-medium px-1">
-            <span className="flex items-center gap-1 text-[#A5B49A]">
-              <span className="text-ember-copper text-[10px]">▸</span> PERSISTENCE & INFERENCE
-            </span>
-            <span className="text-ember-copper font-mono font-bold tracking-tighter text-xs">
-              /////
-            </span>
+        <div className="pt-3 border-t border-[#262E24] space-y-2 flex-shrink-0">
+          <div className="text-[10px] font-mono font-medium tracking-[0.14em] uppercase text-[#8C9684] px-1">
+            System & Engine
           </div>
 
-          <div className="bg-[#10130F] border border-[#394336] rounded-md p-2.5 font-mono text-xs space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-[#A5B49A] font-medium">
+          <div className="bg-[#10130F]/95 border border-[#2F392C] rounded-lg px-3 py-2.5 font-mono text-[11px] space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2 text-[#F1EEE6] font-medium">
                 <span
                   className={`inline-block w-2 h-2 rounded-full ${
-                    health?.database.connected ? 'bg-emerald-500' : 'bg-red-500'
+                    health?.database.connected ? 'bg-emerald-400' : 'bg-red-400'
                   }`}
                 />
                 <span>PostgreSQL</span>
               </span>
-              <span className="text-[10px] text-[#929B89]">
-                {health?.database.connected ? 'Checkpointer Active' : 'Offline'}
+              <span
+                className={`text-[10px] font-semibold ${
+                  health?.database.connected ? 'text-emerald-400' : 'text-red-400'
+                }`}
+              >
+                {health?.database.connected ? 'Active' : 'Offline'}
               </span>
             </div>
 
-            <div className="flex items-center justify-between border-t border-[#394336]/60 pt-1.5">
-              <span className="flex items-center gap-1.5 text-[#A5B49A] font-medium">
+            <div className="border-t border-[#262E24] pt-2 space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2 text-[#F1EEE6] font-medium">
+                  <span
+                    className={`inline-block w-2 h-2 rounded-full ${
+                      engineMode === 'local'
+                        ? health?.database?.connected ? 'bg-emerald-400' : 'bg-amber-400'
+                        : sysStatus.groqStatus === 'Ready' ? 'bg-emerald-400' : 'bg-[#E59A64]'
+                    }`}
+                  />
+                  <span>{engineMode === 'local' ? 'Local GPU' : 'Groq Cloud'}</span>
+                </span>
                 <span
-                  className={`inline-block w-2 h-2 rounded-full ${
+                  className={`text-[10px] font-semibold ${
                     engineMode === 'local'
-                      ? health?.database?.connected ? 'bg-emerald-500' : 'bg-amber-400'
-                      : sysStatus.groqStatus === 'Ready' ? 'bg-emerald-500' : 'bg-ember-copper'
-                  } animate-pulse`}
-                />
-                <span>{engineMode === 'local' ? 'NVIDIA RTX 3050' : 'Groq Cloud'}</span>
-              </span>
-              {engineMode === 'local' ? (
-                <Shield size={12} className="text-emerald-400" />
-              ) : (
-                <ExternalLink size={12} className="text-[#A5B49A]" />
-              )}
-            </div>
-            <div className="text-[11px] text-[#B7BDAE] truncate">
-              {engineMode === 'local'
-                ? 'CUDA Cores • Ollama Local'
-                : displayModels.find((m) => m.id === selectedModel)?.name || selectedModel}
+                      ? health?.database?.connected ? 'text-emerald-400' : 'text-amber-400'
+                      : sysStatus.groqStatus === 'Ready' ? 'text-emerald-400' : 'text-[#E59A64]'
+                  }`}
+                >
+                  {engineMode === 'local'
+                    ? health?.database?.connected ? '0B Egress' : 'Offline'
+                    : sysStatus.groqStatus}
+                </span>
+              </div>
+              <div className="text-[10px] text-[#929B89] truncate pl-4">
+                {engineMode === 'local'
+                  ? 'Ollama · RTX 3050 CUDA'
+                  : displayModels.find((m) => m.id === selectedModel)?.name || selectedModel}
+              </div>
             </div>
           </div>
         </div>
@@ -1450,100 +1443,156 @@ export default function App() {
       {/* =========================================================================
           MAIN CHAT WORKSPACE (CINEMATIC MOUNTAIN WALLPAPER + CLEAN RENDERING)
       ========================================================================= */}
-      <section className="min-w-0 min-h-0 h-full flex flex-col justify-between overflow-hidden border-0 sm:border border-[#394336] rounded-none sm:rounded-xl relative bg-[#10130F] shadow-2xl">
-        {/* Background Wallpaper: Mountains & Glowing Copper Sun */}
+      <section className="min-w-0 min-h-0 h-full flex flex-col justify-between overflow-hidden border-0 sm:border border-[#2C3529] rounded-none sm:rounded-xl relative bg-[#10130F] shadow-2xl">
+        {/* Background Wallpaper: Mountains & Glowing Copper Sun (Full on empty hero, subtle during active reading) */}
         <div
-          className="absolute inset-0 bg-cover bg-center pointer-events-none opacity-65"
+          className={`absolute inset-0 bg-cover bg-center pointer-events-none transition-opacity duration-500 ${
+            messages.length === 0 ? 'opacity-65' : 'opacity-25'
+          }`}
           style={{ backgroundImage: `url('/background.jpg')` }}
         />
 
         {/* Subtle Ambient Vignette Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#10130F]/50 via-transparent to-[#10130F]/40 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#10130F]/65 via-transparent to-[#10130F]/50 pointer-events-none" />
 
         {/* =========================================================================
-            TOP CONTROL BAR (RESPONSIVE GRID ON MOBILE/TABLET, FLEX ON DESKTOP)
+            TOP CONTROL BAR (CLEAN 3-PART HEADER — ZERO DUPLICATE BADGES)
         ========================================================================= */}
-        <header className="px-3 sm:px-5 lg:px-6 py-2 sm:py-2.5 grid grid-cols-[minmax(0,1fr)_auto] lg:flex lg:items-center lg:justify-between gap-2 sm:gap-3 z-10 border-b border-[#394336]/60 backdrop-blur-md flex-shrink-0 select-none">
+        <header className="px-3 sm:px-5 lg:px-6 py-2 sm:py-2.5 grid grid-cols-[minmax(0,1fr)_auto] lg:flex lg:items-center lg:justify-between gap-2.5 sm:gap-3 z-10 border-b border-[#2C3529]/80 bg-[#10130F]/55 backdrop-blur-md flex-shrink-0 select-none">
           {/* Cell 1: Mobile Menu + Dual-Engine Switcher */}
           <div className="flex items-center gap-2 min-w-0 lg:order-1 lg:flex-shrink-0">
             {/* Mobile Sidebar Drawer Toggle */}
             <button
               type="button"
               onClick={() => setIsMobileSidebarOpen(true)}
-              className="md:hidden w-8 h-8 rounded-lg bg-[#171C17]/95 border border-[#394336] text-[#F1EEE6] hover:border-ember-copper flex items-center justify-center flex-shrink-0 cursor-pointer"
+              className="md:hidden w-8 h-8 rounded-lg bg-[#141813]/95 border border-[#2C3529] text-[#F1EEE6] hover:border-ember-copper flex items-center justify-center flex-shrink-0 cursor-pointer"
               aria-label="Open sidebar"
             >
               <Menu size={16} />
             </button>
 
             {/* Dual-Engine Mode Toggle */}
-            <div className="flex items-center bg-[#171C17]/95 border border-[#394336] p-0.5 rounded-lg text-[11px] sm:text-xs font-mono flex-shrink-0">
+            <div className="flex items-center bg-[#10130F]/95 border border-[#2F392C] p-1 rounded-lg gap-1 text-[11px] sm:text-xs font-mono flex-shrink-0">
               <button
                 type="button"
                 onClick={() => handleSwitchEngine('cloud')}
-                className={`px-2 sm:px-2.5 py-1 rounded-md transition-all flex items-center gap-1 sm:gap-1.5 cursor-pointer ${
+                className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
                   engineMode === 'cloud'
-                    ? 'bg-ember-copper/20 text-ember-copper border border-ember-copper/40 font-semibold shadow-sm'
-                    : 'text-[#929B89] hover:text-[#F1EEE6]'
+                    ? 'bg-[#252B22] text-[#F1EEE6] shadow-[inset_0_1px_0_rgba(241,238,230,0.07),0_1px_2px_rgba(0,0,0,0.4)] font-semibold'
+                    : 'text-[#8C9684] hover:text-[#D5DBD0]'
                 }`}
                 title="Cloud Mode: High-throughput Groq LPU inference (Zero Setup)"
               >
-                <Cloud size={12} />
+                {/* Cloud LPU: custom industrial pulse-wave icon */}
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  aria-hidden="true"
+                  className={`flex-shrink-0 transition-colors ${engineMode === 'cloud' ? 'text-[#E59A64]' : 'text-[#8C9684]'}`}
+                >
+                  {/* Cloud base */}
+                  <path
+                    d="M3.5 9.5A2.25 2.25 0 0 1 3.5 5a2.5 2.5 0 0 1 4.95-.6A2 2 0 1 1 10.5 8.5H3.5Z"
+                    stroke="currentColor"
+                    strokeWidth="1.1"
+                    strokeLinejoin="round"
+                    fill="none"
+                  />
+                  {/* Lightning bolt inside cloud */}
+                  <path
+                    d="M7.6 7.5 6.5 9.2h1.1L6.4 11"
+                    stroke="currentColor"
+                    strokeWidth="1.05"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
                 <span className="sm:hidden">Cloud</span>
                 <span className="hidden sm:inline">Cloud LPU</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleSwitchEngine('local')}
-                className={`px-2 sm:px-2.5 py-1 rounded-md transition-all flex items-center gap-1 sm:gap-1.5 cursor-pointer ${
+                className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${
                   engineMode === 'local'
-                    ? 'bg-emerald-950/70 text-emerald-400 border border-emerald-500/50 font-semibold shadow-sm'
-                    : 'text-[#929B89] hover:text-[#F1EEE6]'
+                    ? 'bg-[#1A2A20] text-[#E6F4EC] shadow-[inset_0_1px_0_rgba(143,214,174,0.12),0_1px_2px_rgba(0,0,0,0.4)] font-semibold'
+                    : 'text-[#8C9684] hover:text-[#D5DBD0]'
                 }`}
                 title="Air-Gapped Private Mode: RTX 3050 Laptop GPU (0 Bytes Cloud Egress)"
               >
-                <Shield size={12} className={engineMode === 'local' ? 'text-emerald-400' : ''} />
+                {/* Local RTX: custom industrial chip/grid icon */}
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  aria-hidden="true"
+                  className={`flex-shrink-0 transition-colors ${engineMode === 'local' ? 'text-emerald-400' : 'text-[#8C9684]'}`}
+                >
+                  {/* Chip outer square */}
+                  <rect x="3.5" y="3.5" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.1" fill="none" />
+                  {/* Inner 2×2 grid dots */}
+                  <rect x="5.2" y="5.2" width="1.5" height="1.5" rx="0.3" fill="currentColor" />
+                  <rect x="7.3" y="5.2" width="1.5" height="1.5" rx="0.3" fill="currentColor" />
+                  <rect x="5.2" y="7.3" width="1.5" height="1.5" rx="0.3" fill="currentColor" />
+                  <rect x="7.3" y="7.3" width="1.5" height="1.5" rx="0.3" fill="currentColor" />
+                  {/* Leads top */}
+                  <line x1="5.5" y1="3.5" x2="5.5" y2="1.8" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+                  <line x1="8.5" y1="3.5" x2="8.5" y2="1.8" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+                  {/* Leads bottom */}
+                  <line x1="5.5" y1="10.5" x2="5.5" y2="12.2" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+                  <line x1="8.5" y1="10.5" x2="8.5" y2="12.2" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+                  {/* Leads left */}
+                  <line x1="3.5" y1="5.5" x2="1.8" y2="5.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+                  <line x1="3.5" y1="8.5" x2="1.8" y2="8.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+                  {/* Leads right */}
+                  <line x1="10.5" y1="5.5" x2="12.2" y2="5.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+                  <line x1="10.5" y1="8.5" x2="12.2" y2="8.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+                </svg>
                 <span className="sm:hidden">Local</span>
                 <span className="hidden sm:inline">Local RTX 3050</span>
               </button>
             </div>
           </div>
 
-          {/* Cell 2: Telemetry & Engine Status Indicator (Always visible, never clipped) */}
-          <div className="flex items-center justify-end gap-2 sm:gap-3 flex-shrink-0 lg:order-3">
-            <div className="hidden xl:flex items-center gap-2 px-3 py-1 rounded-md bg-[#171C17]/80 border border-[#394336] font-mono text-xs text-[#A5B49A]">
-              <Zap size={13} className="text-ember-copper" />
-              <span>{engineMode === 'local' ? 'RTX 3050 CUDA' : 'LangGraph + PG Checkpoint'}</span>
-            </div>
-
+          {/* Cell 2: Single Clean Engine Status Pill */}
+          <div className="flex items-center justify-end gap-2 flex-shrink-0 lg:order-3">
             <div
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-md border text-[11px] sm:text-xs font-mono transition-colors whitespace-nowrap ${
+              title={
+                engineMode === 'local' && health?.status !== 'healthy'
+                  ? 'Start local engine: cd backend && python run.py'
+                  : undefined
+              }
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-mono font-medium transition-colors whitespace-nowrap ${
                 engineMode === 'local'
                   ? health?.status === 'healthy'
-                    ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
-                    : 'bg-amber-950/40 border-amber-500/40 text-amber-300'
-                  : 'bg-[#20271F] border-[#394336] text-[#F1EEE6]'
+                    ? 'bg-[#142219]/90 border-emerald-500/45 text-emerald-300'
+                    : 'bg-[#1F1810]/90 border-[#E59A64]/50 text-[#E59A64]'
+                  : health
+                  ? 'bg-[#142219]/90 border-emerald-500/40 text-emerald-300'
+                  : 'bg-red-950/35 border-red-500/45 text-red-300'
               }`}
             >
               {engineMode === 'local' ? (
                 health?.status === 'healthy' ? (
                   <>
-                    <Shield size={12} className="text-emerald-400 flex-shrink-0" />
-                    <span className="hidden sm:inline">0B Egress (127.0.0.1:8000)</span>
-                    <span className="sm:hidden">0B Local</span>
+                    <Shield size={11} className="text-emerald-400 flex-shrink-0" />
+                    <span className="hidden sm:inline">0B Egress</span>
+                    <span className="sm:hidden">0B</span>
                   </>
                 ) : (
                   <>
-                    <span className="w-2 h-2 rounded-full bg-amber-400 inline-block animate-pulse flex-shrink-0" />
-                    <span className="hidden sm:inline">Local Offline (run python run.py)</span>
-                    <span className="sm:hidden">Offline</span>
+                    <span className="w-2 h-2 rounded-full bg-[#E59A64] inline-block flex-shrink-0" />
+                    <span>Local Offline</span>
                   </>
                 )
               ) : (
                 <>
                   <span
                     className={`w-2 h-2 rounded-full inline-block flex-shrink-0 ${
-                      health ? 'bg-emerald-500' : 'bg-red-500'
+                      health ? 'bg-emerald-400' : 'bg-red-400'
                     }`}
                   />
                   <span>{sysStatus.apiStatus}</span>
@@ -1552,35 +1601,44 @@ export default function App() {
             </div>
           </div>
 
-          {/* Cell 3: Model Selector + Session Badge (Full-width row on < lg, inline on lg+) */}
-          <div className="col-span-2 lg:col-span-1 lg:order-2 flex items-center gap-2.5 min-w-0 lg:flex-1">
-            <div className="flex items-center gap-2 min-w-0 flex-1 lg:flex-initial">
-              <span className="font-mono text-xs font-semibold text-[#A5B49A] tracking-wider hidden lg:inline flex-shrink-0">
-                MODEL:
+          {/* Cell 3: Model Selector + Clean Unboxed Session Title */}
+          <div className="col-span-2 lg:col-span-1 lg:order-2 flex items-center gap-3 min-w-0 lg:flex-1">
+            <div className="relative flex items-center min-w-0 w-full lg:w-auto group">
+              <span
+                className="pointer-events-none absolute left-2.5 flex items-center justify-center"
+                aria-hidden="true"
+              >
+                <span
+                  className={`w-1.5 h-1.5 rotate-45 ${
+                    engineMode === 'local' ? 'bg-emerald-400' : 'bg-[#E59A64]'
+                  }`}
+                />
               </span>
-              <div className="relative min-w-0 w-full lg:w-auto">
-                <select
-                  value={selectedModel}
-                  onChange={(e) => setSelectedModel(e.target.value)}
-                  className="w-full lg:w-auto lg:max-w-[240px] truncate bg-[#171C17]/95 border border-[#394336] text-[#F1EEE6] font-mono text-xs py-1.5 pl-3 pr-7 rounded-lg hover:border-[#A5B49A] transition-colors cursor-pointer focus:outline-none"
-                >
-                  {displayModels.map((m) => (
-                    <option key={m.id} value={m.id} className="bg-[#171C17] text-[#F1EEE6]">
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className="appearance-none w-full lg:w-auto lg:max-w-[290px] xl:max-w-[330px] truncate bg-[#141813]/95 border border-[#2F392C] group-hover:border-[#495744] text-[#F1EEE6] font-mono text-xs py-1.5 pl-6 pr-8 rounded-lg transition-colors cursor-pointer focus:outline-none focus:border-[#E59A64]/75 shadow-[inset_0_1px_0_rgba(241,238,230,0.04)]"
+              >
+                {displayModels.map((m) => (
+                  <option key={m.id} value={m.id} className="bg-[#141813] text-[#F1EEE6]">
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={13}
+                className="pointer-events-none absolute right-2.5 text-[#8C9684] group-hover:text-[#F1EEE6] transition-colors"
+              />
             </div>
 
-            {/* Active Session Badge & Smart Title Button */}
-            <div className="hidden xl:flex items-center gap-2 px-3 py-1 bg-[#171C17]/80 border border-[#394336] rounded-md font-mono text-xs text-[#A5B49A] min-w-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-ember-copper inline-block flex-shrink-0" />
-              <span className="text-[#F1EEE6] font-medium truncate max-w-xs">{sessionTitle}</span>
+            {/* Subtle Unboxed Active Session Title */}
+            <div className="hidden xl:flex items-center gap-1.5 text-xs text-[#8C9684] min-w-0">
+              <span className="text-[#394336]">/</span>
+              <span className="font-sans font-medium text-[#B7BDAE] truncate max-w-[220px]">{sessionTitle}</span>
               {activeConversationId && (
                 <button
                   onClick={() => handleGenerateTitle()}
-                  className="ml-1 text-[#929B89] hover:text-ember-copper transition-colors cursor-pointer flex-shrink-0"
+                  className="text-[#8C9684] hover:text-ember-copper transition-colors cursor-pointer flex-shrink-0 p-0.5"
                   title="Generate meaningful title via LangGraph"
                 >
                   <Sparkles size={12} />
@@ -1621,15 +1679,24 @@ export default function App() {
           ) : messages.length === 0 ? (
             /* Empty State Hero Banner */
             <div className="min-h-full flex flex-col items-center justify-center text-center max-w-xl mx-auto py-6 sm:py-12 px-1">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[#20271F]/90 border border-[#394336] flex items-center justify-center text-ember-copper mb-4 sm:mb-5 shadow-[4px_4px_0px_0px_#A5B49A]">
-                <Sparkles size={24} />
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-[#171C17]/95 border border-[#394336] flex items-center justify-center mb-4 sm:mb-5 shadow-[2px_2px_0px_0px_#A5B49A]">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M4 3L11 12L4 21H8.5L13.5 14.5L18.5 21H23L16 12L23 3H18.5L13.5 9.5L8.5 3H4Z"
+                    fill="#E59A64"
+                  />
+                </svg>
               </div>
-              <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-normal text-[#F1EEE6] tracking-wide mb-2.5 sm:mb-3">
-                Industrial Intelligence Workspace
-              </h2>
-              <p className="font-sans text-xs sm:text-sm text-[#B7BDAE] max-w-md mb-6 sm:mb-8 leading-relaxed">
-                Persistent AI conversations powered by LangGraph, PostgreSQL checkpoints, and high-throughput Groq inference.
-              </p>
+              <div className="px-4 py-2 rounded-xl bg-[#10130F]/45 backdrop-blur-[2px] mb-5 sm:mb-7">
+                <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-normal text-[#F1EEE6] tracking-wide mb-2">
+                  Industrial Intelligence Workspace
+                </h2>
+                <p className="font-sans text-xs sm:text-sm text-[#D5DBD0] max-w-md mx-auto leading-relaxed">
+                  {engineMode === 'local'
+                    ? 'Private local GPU inference with hybrid PDF RAG and PostgreSQL memory.'
+                    : 'Hybrid PDF RAG, agentic web search, and PostgreSQL-checkpointed memory.'}
+                </p>
+              </div>
 
               {/* Starter Prompt Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full text-left">
@@ -1665,14 +1732,19 @@ export default function App() {
                     <div
                       className={`w-7 h-7 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-shrink-0 font-mono text-[11px] sm:text-xs font-bold border ${
                         isUser
-                          ? 'bg-[#20271F] border-[#394336] text-ember-copper shadow-sm'
-                          : 'bg-[#E59A64] border-[#E59A64] text-[#10130F] shadow-[2px_2px_0px_0px_#A5B49A]'
+                          ? 'bg-[#171C17] border-[#394336] text-[#A5B49A]'
+                          : 'bg-[#171C17] border-[#E59A64]/60 text-[#E59A64] shadow-[2px_2px_0px_0px_#A5B49A]'
                       }`}
                     >
                       {isUser ? (
                         'U'
                       ) : (
-                        <Sparkles size={15} fill="currentColor" strokeWidth={1} />
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path
+                            d="M4 3L11 12L4 21H8.5L13.5 14.5L18.5 21H23L16 12L23 3H18.5L13.5 9.5L8.5 3H4Z"
+                            fill="#E59A64"
+                          />
+                        </svg>
                       )}
                     </div>
 
@@ -1685,8 +1757,8 @@ export default function App() {
                       <div
                         className={`p-3 sm:p-4 md:p-5 rounded-lg border text-sm leading-relaxed overflow-hidden ${
                           isUser
-                            ? 'bg-[#171C17]/95 border-[#394336] text-[#F1EEE6] shadow-[3px_3px_0px_0px_#A5B49A]'
-                            : 'bg-[#171C17]/95 border-[#394336] text-[#F1EEE6] shadow-[4px_4px_0px_0px_#E59A64]'
+                            ? 'bg-[#141813]/95 border-[#2C3529] border-r-2 border-r-[#A5B49A] text-[#F1EEE6] shadow-md'
+                            : 'bg-[#141813]/95 border-[#2C3529] border-l-2 border-l-[#E59A64] text-[#F1EEE6] shadow-[0_8px_24px_rgba(0,0,0,0.45)]'
                         }`}
                       >
                         {/* Message Content */}
@@ -2073,7 +2145,7 @@ export default function App() {
                   handleUploadFile(fakeEvent);
                 }
               }}
-              className="rounded-xl border border-[#394336] bg-[#171C17]/95 backdrop-blur-md shadow-[4px_4px_0px_0px_#E59A64] flex flex-col transition-all overflow-hidden"
+              className="rounded-xl border border-[#394336] focus-within:border-[#E59A64]/80 bg-[#141813]/95 backdrop-blur-md shadow-[2px_2px_0px_0px_#E59A64] flex flex-col transition-all overflow-hidden"
             >
               {/* ChatGPT-Style File Attachment Pills directly above input */}
               {(selectedDocIds.length > 0 || isUploadingDoc) && (
@@ -2210,17 +2282,30 @@ export default function App() {
                       disabled={isWebLocked}
                       title={titleText}
                       data-testid="web-search-toggle"
-                      className={`h-9 px-2 sm:px-2.5 rounded-lg border flex items-center gap-1 sm:gap-1.5 font-mono text-[10px] sm:text-[11px] transition-all flex-shrink-0 ${
+                      className={`h-9 px-2 sm:px-2.5 rounded-lg border flex items-center gap-1.5 font-mono text-[10px] sm:text-[11px] transition-all flex-shrink-0 ${
                         isWebLocked
-                          ? 'bg-[#10130F] border-[#394336]/60 text-[#929B89]/60 cursor-not-allowed'
+                          ? 'bg-[#10130F] border-[#394336]/60 text-[#929B89]/70 cursor-not-allowed'
                           : effectiveMode === 'on'
                           ? 'bg-[#E59A64]/15 border-ember-copper text-[#E59A64] font-semibold cursor-pointer shadow-xs'
                           : effectiveMode === 'auto'
-                          ? 'bg-[#20271F] border-[#A5B49A]/60 text-[#A5B49A] hover:border-ember-copper hover:text-[#F1EEE6] cursor-pointer'
-                          : 'bg-[#20271F] border-[#394336] text-[#929B89] hover:text-[#F1EEE6] hover:border-[#A5B49A] cursor-pointer'
+                          ? 'bg-[#1B241A] border-[#A5B49A]/70 text-[#F1EEE6] hover:border-ember-copper cursor-pointer'
+                          : 'bg-[#171C17] border-[#394336] text-[#8C9684] hover:text-[#F1EEE6] hover:border-[#A5B49A] cursor-pointer'
                       }`}
                     >
-                      <Globe size={14} />
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                          isWebLocked
+                            ? engineMode === 'local'
+                              ? 'bg-emerald-400/70'
+                              : 'bg-[#E59A64]/70'
+                            : effectiveMode === 'on'
+                            ? 'bg-[#E59A64]'
+                            : effectiveMode === 'auto'
+                            ? 'bg-emerald-400'
+                            : 'bg-[#5A6555]'
+                        }`}
+                      />
+                      <Globe size={13} />
                       <span>{modeLabel}</span>
                     </button>
                   );
