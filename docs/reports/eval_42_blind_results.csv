@@ -1,0 +1,219 @@
+id,category,doc,question,expected_answer,actual_answer,is_correct,faithfulness,hallucination,is_negative,is_refusal,citations_count,correct_doc_attr,correct_page_attr,duration_sec,ttft_ms,gen_ms,retrieval_ms,rerank_ms,tps,prompt_tokens,gpu_vram_mb,gpu_util_pct,gpu_temp_c,cpu_pct,ram_used_gb
+B01,Direct Factual,northstar_mobility.pdf,Who is the Chief Technology Officer of Northstar Mobility?,Aditi Menon,"According to the document excerpts, the Chief Technology Officer of Northstar Mobility is Aditi Menon.",True,1.0,False,False,False,5,False,True,11.154,9185.0,486.9,348.9,583.0,40.0,2446,3144.0,80.0,87.0,20.0,14.06
+B02,Direct Factual,northstar_mobility.pdf,Who is the Head of Finance at Northstar Mobility?,Rohan Iyer,"According to the document excerpts, the Head of Finance at Northstar Mobility is Rohan Iyer.",True,1.0,False,False,False,5,False,True,4.158,1359.6,365.2,1540.3,735.6,53.4,2446,3482.0,83.0,87.0,36.8,14.4
+B03,Direct Factual,northstar_mobility.pdf,Who is the Chief Operating Officer of Northstar Mobility?,Kabir Rao,"According to the provided document excerpts, the Chief Operating Officer (COO) of Northstar Mobility is Kabir Rao.",True,1.0,False,False,False,5,False,True,3.092,1237.5,429.5,515.7,686.3,51.5,2446,3495.0,96.0,86.0,3.0,14.43
+B04,Direct Factual,northstar_mobility.pdf,"On what date was Northstar Mobility Cooperative founded, and where is it headquartered?","Founded on 14 March 2021; Headquartered in Pune, Maharashtra, India","According to the document excerpts, Northstar Mobility Cooperative (NMC) was founded on 14 March 2021. It is headquartered in Pune, Maharashtra, India.",True,1.0,False,False,False,5,False,True,2.855,1054.5,623.5,440.8,587.0,45.9,2246,3511.0,95.0,85.0,25.0,14.46
+B05,Direct Factual,Ambulance Dispatch.pdf,What is the name of the author of the Ambulance Dispatch Optimization literature survey?,Pranit Kumar,The name of the author of the Ambulance Dispatch Optimization literature survey is Pranit Kumar.,True,1.0,False,False,False,5,False,True,3.614,1535.8,326.1,306.0,1289.6,59.8,2182,3495.0,37.0,85.0,0.0,14.63
+B06,Direct Factual,Ambulance Dispatch.pdf,What is Pranit Kumar's university student number (USN) in the Ambulance Dispatch report?,1TE24CS218,"According to the document excerpt, Pranit Kumar's university student number (USN) is 1TE24CS218.",True,1.0,False,False,False,5,False,True,3.639,1404.9,479.4,549.6,1040.7,35.3,2296,3504.0,93.0,85.0,17.5,14.63
+B07,Direct Factual,RESUME__PRANIT.pdf,What college and degree does Pranit Kumar list in his resume?,"BMS Institute of Technology and Management, B.E. in Computer Science and Engineering","According to the provided document excerpts, Pranit Kumar lists the following college and degree:
+
+BMS Institute of Technology and Management, Bengaluru
+2024 – 2028
+B.E. in Computer Science and Engineering
+CGPA: 8.72",True,1.0,False,False,False,3,False,True,2.895,1238.3,903.9,331.4,263.1,46.0,1627,3489.0,96.0,86.0,8.9,14.59
+B08,Tables & Structured Data,northstar_mobility.pdf,"According to the workforce distribution table, how many employees work in Customer Success versus Commercial?",Customer Success: 8; Commercial: 12,"According to the workforce distribution table on Page 2 of the document, there are 8 employees in the Customer Success department and 12 employees in the Commercial department.",True,1.0,False,False,False,5,False,True,3.072,1404.0,547.5,369.4,596.1,66.5,1938,3497.0,96.0,84.0,0.0,14.7
+B09,Tables & Structured Data,northstar_mobility.pdf,What was Northstar Mobility's annual recurring revenue (ARR) and customer logo churn as of 30 September 2026?,ARR: INR 6.2 crore; Churn: 1.8%,"According to the provided excerpts, Northstar Mobility's annual recurring revenue (ARR) as of 30 September 2026 was INR 6.2 crore, and customer logo churn was 1.8% as of Q3 2026.",True,1.0,False,False,False,5,False,True,3.489,1433.2,883.1,369.2,650.3,44.2,2228,3490.0,96.0,85.0,4.2,14.68
+B10,Tables & Structured Data,northstar_mobility.pdf,"In the monthly delivery breakdown for Q3 2026, how many completed deliveries were recorded in August 2026 and what was the on-time rate?","461,000 completed deliveries; 95.1% on-time delivery","According to the document excerpts, in the monthly delivery breakdown for Q3 2026, the following information is provided for August 2026:
+
+- Completed deliveries: 461,000
+- On-time rate: 95.1%
+
+These values are found on Page 2 of the document [Page 2 (PDF p. 2)].",True,1.0,False,False,False,10,False,True,4.113,1744.6,1303.3,332.4,579.1,43.9,3314,3489.0,82.0,86.0,4.5,14.48
+B11,Tables & Structured Data,Ambulance Dispatch.pdf,"In Table 1 of Ambulance Dispatch Optimization, what method did Ben Othmen et al. investigate and what did it focus on?",Variable Neighbourhood Search; vehicle assignment and route optimization,"According to Table 1 in the Ambulance Dispatch Optimization document, Ben Othmen et al. investigated the method of Variable Neighbourhood Search (VNS) and it focused on ambulance allocation and routing. Specifically, it considered location, traffic, availability, and emergency priority.",True,1.0,False,False,False,5,False,True,4.575,1881.8,1018.5,312.4,1197.4,49.8,2971,3497.0,21.0,85.0,18.6,14.7
+B12,Tables & Structured Data,Ambulance Dispatch.pdf,"According to Table 2 of Ambulance Dispatch Optimization, what technique is associated with Sudharsanan et al. and what was its application?",Edge Machine Learning; accident detection and emergency identification,"According to Table 2 of Ambulance Dispatch Optimization, Sudharsanan et al. is associated with the technique of Edge Machine Learning, and its application is ""Accident detection and emergency identification.""",True,1.0,False,False,False,5,False,True,3.606,1381.9,708.0,312.0,1040.4,53.2,2866,3489.0,40.0,84.0,41.7,14.38
+B13,Tables & Structured Data,pythonlearn.pdf,What are the four main computer hardware components listed in Chapter 1 of pythonlearn?,"CPU, Main Memory, Secondary Memory, Input and Output devices","According to [Page 10 (PDF p. 16)] of the pythonlearn document, the four main computer hardware components listed in Chapter 1 are:
+
+1. Input
+2. Output
+3. Devices
+4. Software",False,0.5,False,False,False,5,True,False,4.773,1921.3,839.0,367.9,1476.4,46.5,2879,3488.0,82.0,85.0,15.6,14.69
+B14,Multi-Hop Reasoning,northstar_mobility.pdf,"In incident INC-2026-09-17, what was the root cause of the webhook delay, who owned the corrective action, and on what date was OPS-27 completed?",Root cause: retry worker did not apply exponential backoff on HTTP 429; Action owner: Aditi Menon (CTO); Completed on 24 September 2026,"According to the document excerpts, the following information is available for incident INC-2026-09-17:
+
+1. Root cause of the webhook delay: A retry worker did not apply exponential backoff when a partner endpoint returned HTTP 429 Too Many Requests. The repeated retries increased queue lag.
+
+2. Corrective action owner: The corrective action was owned by Aditi Menon, who is the Chief Technology Officer.
+
+3. Completion date of OPS-27: OPS-27 was completed on 24 September 2026, one day before its due date.",True,1.0,False,False,False,5,False,True,4.884,1557.3,1996.2,358.5,815.3,52.1,2007,3489.0,68.0,86.0,0.0,14.6
+B15,Multi-Hop Reasoning,northstar_mobility.pdf,"How did Northstar Mobility's on-time delivery rate change between Q2 2026 and Q3 2026, and how many total completed deliveries were added?","Increased from 94.6% to 95.2% (+0.6 percentage points); added 150,000 completed deliveries","According to the document excerpts, Northstar Mobility's on-time delivery rate increased from 94.6% in Q2 2026 to 95.2% in Q3 2026, showing an improvement of +0.6 percentage points.
+
+As for the total completed deliveries, Q2 2026 had 1,240,000 deliveries, while Q3 2026 had 1,390,000 deliveries. This represents an increase of +150,000 deliveries.",True,1.0,False,False,False,5,False,True,4.36,1335.1,1779.0,407.6,656.4,38.0,2236,3504.0,30.0,85.0,82.9,14.81
+B16,Multi-Hop Reasoning,RM Module-2.pdf,"Explain how replication, randomization, and local control work together as basic principles of experimental design in RM Module-2.",Replication improves precision; Randomization protects against extraneous influences by chance assignment; Local control forms homogeneous blocks to remove nuisance variation,"According to the provided document excerpts, replication, randomization, and local control work together as basic principles of experimental design in RM Module-2. Here's a breakdown of how they function together:
+
+1. **Replication**: This involves repeating the experiment multiple times to improve precision. The goal is to reduce the impact of extraneous influences and increase the reliability of the results.
+
+2. **Randomization**: This involves randomly assigning treatments to experimental units. The purpose of randomization is to prevent known or unknown extraneous factors from systematically favoring one treatment over another. This helps to combine uncontrolled variation under the heading of chance, supporting an unbiased estimate of experimental error.
+
+3. **Local Control**: This involves dividing experimental units into relatively homogeneous blocks and then dividing each block into parts equal to the number of treatments. The purpose of local control is to remove known extraneous variability from experimental error. By doing so, local control helps to separate treatment, block, and error variation during analysis.
+
+Together, these three principles work to:
+
+- Reduce the impact of extraneous influences (randomization and local control)
+- Increase the reliability of the results (replication)
+- Support an unbiased estimate of experimental error (randomization and local control)
+
+By combining these principles, experimental designers can create a robust design that minimizes the impact of extraneous influences and provides reliable results.
+
+[Page 20 Extracted Table]:
+| Replication | Randomization | Local control |
+| --- | --- | --- |
+| Repeat treatments across several experimental units to improve precision. | Allocate treatments to experimental units through a chance mechanism. | Divide experimental units into relatively homogeneous blocks. |
+
+[Page 23 Extracted Table]:
+| Purpose |
+|  | Local control removes known extraneous variability from experimental error. |
+
+[Page 47 Extracted Table]:
+| 1 Question: Do two rice varieties produce different yields? | 2 Design: Comparative experimental design. | 3 Replication: Apply each variety to several field portions. | 4 Randomization: Randomly assign varieties to portions. | 5 Local control: Form blocks with similar soil fertility. | 6 Data collection: Observe and record yield under standardized conditions. | 7 Analysis: Separate treatment, block and error variation. |
+
+[Page 22 Extracted Table]:
+| Rice-variety example | andomly assign varieties to field portions so a difference in soil fertility between field areas is not confused with the variety effect. |",True,1.0,False,False,False,5,True,True,11.617,1070.5,8831.2,338.3,1207.3,56.8,1294,3489.0,10.0,86.0,2.4,14.81
+B17,Multi-Hop Reasoning,northstar_mobility.pdf,"What are the three core products offered by Northstar Mobility, and which primary user role corresponds to each?","RoutePilot (dispatch managers & analysts), FleetPulse (fleet supervisors & maintenance), ProofDrop (retailer platforms & integration engineers)","According to the provided document excerpts, the three core products offered by Northstar Mobility are:
+
+1. **RoutePilot**: A web dashboard for primary users in the **Retailer** role.
+2. **FleetPulse v2**: A pilot product with planned release date of 12 November 2026, intended for primary users in the **Retailer** role, with a focus on battery-health alerts and configurable temperature thresholds.
+3. **Bulk planning**: Not explicitly described as a product, but mentioned as a feature of RoutePilot, intended for primary users in the **Regional Carrier** role.
+
+Note that the primary user roles mentioned are Retailer and Regional Carrier, but the document does not explicitly state the corresponding product names for these roles.",True,1.0,False,False,False,5,False,True,5.772,1508.6,2791.8,449.0,765.8,51.2,2456,3489.0,88.0,85.0,13.5,14.5
+B18,Exact Figures & Policies,northstar_mobility.pdf,What are the service credit percentages awarded under the Critical tier if monthly on-time delivery drops between 91.0% and 93.9%?,5% service credit,"According to the document excerpts, if a tier target is missed, the customer may request a service credit equal to 5% of that month's platform fee when the result is up to 2 percentage points below target, or 10% when it is more than 2 percentage points below target.
+
+However, there is no information provided about the Critical tier's service credit percentages for on-time delivery rates between 91.0% and 93.9%. The provided information only mentions the Critical tier's monthly on-time target as 99.0%.",True,1.0,False,False,False,5,False,True,4.655,1422.2,2056.9,340.0,647.2,52.5,1950,3496.0,56.0,86.0,6.2,14.96
+B19,Exact Figures & Policies,northstar_mobility.pdf,What is the maximum service credit percentage when delivery performance falls below 88.0%?,20% service credit,"According to the provided document excerpts, specifically Page 3 of the northstar_mobility_knowledge_base_plain.pdf, the maximum service credit percentage is not explicitly stated for a delivery performance below 88.0%.
+
+However, it is mentioned that if a tier target is missed, the customer may request a service credit equal to 5% of that month’s platform fee when the result is up to 2 percentage points below target, or 10% when it is more than 2 percentage points below target. Total service credits are capped at 10% of the monthly platform fee.
+
+Since 88.0% is 8 percentage points below the 94.0% target, it falls within the range of 2 percentage points below target. Therefore, the maximum service credit percentage in this case would be 5% of the monthly platform fee, which is 5% of the value stated on Page 3 of the document.",False,0.5,False,False,False,5,False,True,5.248,728.8,3389.8,343.1,623.0,53.3,1938,3489.0,27.0,86.0,10.9,14.98
+B20,Exact Figures & Policies,northstar_mobility.pdf,What is the burst request allowance for ProofDrop API v2 in any rolling 10-second window?,30 requests in any rolling 10-second window,"According to the document excerpts, the burst request allowance for ProofDrop API v2 in any rolling 10-second window is 30 requests. [Page 5 (PDF p. 5)]",True,1.0,False,False,False,5,False,True,2.922,1312.8,634.3,360.6,478.4,53.3,1718,3493.0,63.0,85.0,0.0,14.64
+B21,Exact Figures & Policies,northstar_mobility.pdf,"What are the first response time targets for Standard, Business Plus, and Critical support tiers in Northstar Mobility?",Standard: 4 hours; Business Plus: 1 hour; Critical: 15 minutes,"According to the document excerpts, the first response time targets for the Standard, Business Plus, and Critical support tiers in Northstar Mobility are as follows:
+
+- Standard: 1 business day
+- Business Plus: 1 hour
+- Critical: 15 minutes",True,1.0,False,False,False,5,False,True,3.306,1398.6,890.6,356.5,520.1,56.9,2457,3473.0,35.0,85.0,8.1,14.37
+B22,Exact Figures & Policies,northstar_mobility.pdf,What is the exact data retention period for vehicle delivery telemetry in Northstar Mobility?,13 months from collection,"According to the document excerpts, the delivery telemetry retention period for Northstar Mobility is 13 months from collection.",True,1.0,False,False,False,5,False,True,2.546,1204.4,377.9,329.6,496.2,61.9,2168,3473.0,95.0,85.0,5.3,14.41
+B23,Exact Figures & Policies,RESUME__PRANIT.pdf,What accuracy did Pranit Kumar achieve on the Random Forest health-classification module in MiniTrack AI?,88.8% accuracy on 20 clinical metrics,"According to the provided excerpts, Pranit Kumar achieved 88.8% accuracy on 20 clinical metrics with the Random Forest health-classification module in MiniTrack AI. This information is found on Page 1 of the document excerpt [Page 1 (PDF p. 2)].",True,1.0,False,False,False,3,False,True,2.326,694.1,957.1,302.0,186.6,53.0,1634,3473.0,0.0,85.0,65.3,14.68
+B24,Indirect & Paraphrased,northstar_mobility.pdf,Which four external retail/food partner companies were selected to trial battery-health alerts in November 2026?,"ArrowCart, BluePeak Foods, Mint Retail, UrbanCrate","According to the document excerpts, the four external retail/food partner companies selected to trial battery-health alerts in November 2026 are:
+
+1. ArrowCart
+2. BluePeak Foods
+3. Mint Retail
+4. UrbanCrate
+
+These companies are part of the FleetPulse v2 pilot, which aims to test battery-health alerts and configurable temperature thresholds. [Page 4 (PDF p. 1)]",True,1.0,False,False,False,5,False,True,3.823,1368.4,1474.6,329.0,510.8,47.6,1913,3471.0,63.0,86.0,13.5,14.67
+B25,Indirect & Paraphrased,northstar_mobility.pdf,"Where is primary customer data physically hosted for Northstar Mobility, and what encryption standard protects it at rest?","Primary customer data stored in Mumbai, India; protected by AES-256 encryption at rest","According to the document excerpts, primary customer data is stored in Mumbai, India. The encryption standard used to protect customer data at rest is AES-256.",True,1.0,False,False,False,5,False,True,2.614,966.4,542.2,312.4,630.5,59.9,2173,3497.0,85.0,85.0,30.6,14.43
+B26,Indirect & Paraphrased,RM Module-2.pdf,What is the difference between an extraneous variable and a confounded relationship in research methodology?,An extraneous variable is an independent variable not related to the study purpose that affects the dependent variable; a relationship is confounded when the dependent variable is not free from its influence,"According to the provided document excerpts, an extraneous variable and a confounded relationship are related concepts in research methodology.
+
+An extraneous variable is defined as an independent variable not related to the purpose of the study but capable of affecting the dependent variable. (Page 10 Extracted Table, RM Module-2.pdf, [Page 10 (PDF p. 10)])
+
+This means that an extraneous variable is an external factor that can influence the outcome of the study, but it is not the variable being tested.
+
+On the other hand, a confounded relationship occurs when the dependent variable is not free from extraneous influences. (Page 10 Extracted Table, RM Module-2.pdf, [Page 10 (PDF p. 10)])
+
+In other words, a confounded relationship happens when the extraneous variable affects the dependent variable, making it difficult to determine the true effect of the independent variable.
+
+To illustrate the difference, consider the example mentioned in the document: ""In a study of self-concept and social-studies achievement, intelligence may affect achievement and therefore act as an extraneous variable."" (Page 10 Extracted Table, RM Module-2.pdf, [Page 10 (PDF p. 10)])
+
+In this case, intelligence is an extraneous variable because it is not related to the purpose of the study (self-concept and social-studies achievement), but it can affect the outcome. However, the relationship between intelligence and achievement is confounded because intelligence is influencing the dependent variable (achievement), making it difficult to determine the true effect of the independent variable (self-concept).
+
+In summary, an extraneous variable is an external factor that can affect the outcome of the study, while a confounded relationship occurs when the extraneous variable affects the dependent variable, making it difficult to determine the true effect of the independent variable.",True,1.0,False,False,False,10,True,True,10.154,1702.2,6894.8,324.8,1075.8,52.4,2401,3506.0,60.0,86.0,2.8,14.67
+B27,Indirect & Paraphrased,pythonlearn.pdf,What are Python's operator precedence rules for exponentiation versus multiplication and addition in pythonlearn?,"Exponentiation has highest precedence, followed by multiplication and division, followed by addition and subtraction","According to the provided excerpts from pythonlearn.pdf, Python's operator precedence rules are as follows:
+
+1. Exponentiation has the next highest precedence, so 2**1+1 is 3, not 4, and 3*1**3 is 3, not 27.
+
+2. Multiplication and Division have the same precedence, which is higher than Addition and Subtraction, which also have the same precedence.
+
+3. When there are multiple operators with the same precedence, operators are evaluated from left to right. This is demonstrated in the expression 5-3-1, which equals 1, not 3, because the 5-3 happens first and then 1 is subtracted from 2.
+
+In summary, the order of precedence is:
+
+- Exponentiation (highest)
+- Multiplication and Division (tied)
+- Addition and Subtraction (tied)
+
+This is consistent with mathematical convention, as stated in the document.",True,1.0,False,False,False,5,True,False,7.629,1657.9,3812.7,360.6,1635.1,43.0,2321,3491.0,87.0,86.0,26.3,14.61
+B28,Technical Definitions,northstar_mobility.pdf,What does Northstar Mobility define as 'first-attempt failure' in its operations glossary?,"The first delivery attempt did not complete, regardless of whether a later attempt succeeds","According to the document excerpts, Northstar Mobility defines 'first-attempt failure' as ""the first delivery attempt did not complete, regardless of whether a later attempt succeeds"" (Source: Page 2 of northstar_mobility_knowledge_base_plain.pdf).",True,1.0,False,False,False,5,False,True,4.068,1775.0,927.0,375.9,797.3,42.1,2454,3492.0,33.0,86.0,19.5,14.41
+B29,Technical Definitions,RM Module-2.pdf,"According to RM Module-2, what is an 'experience survey' in exploratory research and how should it be conducted?","Selecting people with practical problem experience, using a systematic yet flexible interview schedule to refine problems","According to RM Module-2, an 'experience survey' is one of the three important methods in exploratory research. 
+
+[Page 15 Extracted Table]:
+| Exploratory method: experience survey |  |
+| --- | --- |
+| ▶ Select people who have practical experience with the problem.
+▶ Include respondents representing different kinds of experience.
+▶ Prepare a systematic interview schedule.
+▶ Keep the interview flexible enough for unexpected issues to emerge.
+▶ Where useful, send the discussion questions in advance.
+▶ Use the findings to refine the problem and assess practical research possibilities. |  |
+| BRMK507 – Research Methodology and IPR: Module 2 | 15/52 |
+
+[Page 15 Extracted Table]:
+|  |  |
+| --- | --- |
+|  | iterature survey; experience survey; analysis of insight-stimulating examples. |
+
+In an experience survey, the following steps should be followed:
+
+1. Select people who have practical experience with the problem.
+2. Include respondents representing different kinds of experience.
+3. Prepare a systematic interview schedule.
+4. Keep the interview flexible enough for unexpected issues to emerge.
+5. Where useful, send the discussion questions in advance.
+6. Use the findings to refine the problem and assess practical research possibilities.
+
+This method is used to gather information from individuals who have hands-on experience with the research problem, providing valuable insights and practical perspectives.",True,1.0,False,False,False,5,True,True,9.431,1303.5,6354.1,346.6,1241.9,44.6,1432,3493.0,24.0,87.0,16.7,14.59
+B30,Technical Definitions,pythonlearn.pdf,"Explain the difference between syntax errors, runtime errors, and semantic errors as described in pythonlearn.",Syntax errors violate grammar; runtime errors occur during execution; semantic errors produce unintended results without crashing,"According to the provided excerpts from pythonlearn, the differences between syntax errors, runtime errors, and semantic errors are as follows:
+
+1. **Syntax Errors**: These occur when the program's syntax is incorrect, but the program is syntactically correct. In other words, the program's structure and formatting are correct, but the code contains mistakes that prevent it from running correctly. Syntax errors are usually easy to find and fix.
+
+Example: Indentation error in the code snippet provided, where the second line is indented by one space, but the error message points to the variable `y`.
+
+2. **Runtime Errors**: These occur when the program's syntax is correct, but the program attempts to execute a statement or operation that is not allowed or is not valid. Runtime errors can be caused by a variety of factors, including incorrect variable usage, division by zero, or attempting to access an index that is out of range.
+
+Example: Division by zero error in the code snippet provided, where the program attempts to divide by zero, causing a runtime error.
+
+3. **Semantic Errors**: These occur when the program's syntax and runtime checks pass, but the program does not behave as intended. In other words, the program's logic is incorrect, and it produces the wrong output or results. Semantic errors can be caused by a variety of factors, including incorrect logic, incorrect variable usage, or incorrect assumptions about the data.
+
+Example: The code snippet provided, where the program prints the string ""And now for something completely different"" without displaying the value of the variable `pi`, which is an example of a semantic error.
+
+In summary, the key differences between syntax errors, runtime errors, and semantic errors are:
+
+* Syntax errors: incorrect syntax, but program runs correctly.
+* Runtime errors: incorrect runtime checks, but program does not run correctly.
+* Semantic errors: incorrect logic, but program runs correctly.
+
+Source:
+pythonlearn.pdf | Page 19 (PDF p. 25)
+pythonlearn.pdf | Page 20 (PDF p. 26)
+pythonlearn.pdf | Page 34 (PDF p. 40)
+pythonlearn.pdf | Page 123 (PDF p. 129)",True,1.0,False,False,False,10,True,False,36.988,3477.1,31162.2,361.0,1695.8,14.1,4708,3491.0,3.0,88.0,5.9,14.62
+B31,Technical Definitions,Ambulance Dispatch.pdf,What mathematical models or heuristics did Zhu and Li use for dynamic ambulance relocation?,DA-Noisy-D3QN (Deep Reinforcement Learning),"According to the document excerpt, Zhu and Li [1] used an improved Deep Reinforcement Learning (DRL) approach for ambulance dispatch and redeployment. The specific mathematical model or heuristic used by Zhu and Li is not explicitly stated in the provided excerpt.
+
+However, based on the context, it can be inferred that Zhu and Li employed a DRL algorithm, which is a type of reinforcement learning algorithm that uses a combination of machine learning and game theory to learn optimal policies for complex decision-making problems.
+
+The excerpt mentions that Zhu and Li's approach, called DA-Noisy-D3QN, is an improved version of the original D3QN algorithm. The D3QN algorithm is a type of DRL algorithm that uses a combination of Q-learning and deep neural networks to learn the optimal policy for the ambulance dispatch problem.
+
+Unfortunately, the provided excerpt does not provide further details on the specific mathematical model or heuristic used by Zhu and Li.",True,1.0,False,False,False,5,False,True,21.782,2780.5,16810.0,406.0,1564.3,11.8,2706,3491.0,66.0,88.0,20.4,14.75
+B32,Document Isolation,RESUME__PRANIT.pdf,"From RESUME__PRANIT, what AI workspace project did Pranit Kumar build, and what technologies did he use?","TARK AI; built with React, Python, FastAPI, PostgreSQL, pgvector, LangGraph, MCP, Docker","According to the provided document excerpt [RESUME__PRANIT (6).pdf | Page 1], Pranit Kumar built a full-stack AI workspace project called TARK AI – Agentic AI Workspace.
+
+He used the following technologies in this project:
+
+1. React
+2. Python
+3. FastAPI
+4. PostgreSQL
+5. pgvector
+6. LangGraph
+7. MCP
+8. LLM APIs
+9. Docker
+
+These technologies were used to build a full-stack AI workspace featuring web search, Deep Research, persistent memory, project context and document understanding, backed by FastAPI and PostgreSQL.",True,1.0,False,False,False,3,False,True,13.382,1399.2,11142.5,353.1,271.6,9.3,1640,3491.0,86.0,88.0,8.6,15.08
+B33,Document Isolation,Ambulance Dispatch.pdf,"From Ambulance Dispatch Optimization, what autonomous institute affiliated to VTU is listed on the survey report?",BMS Institute of Technology and Management,"According to the provided excerpts from the document ""Ambulance Dispatch Optimization.pdf"", the BMS Institute of Technology and Management is listed as an autonomous institute affiliated to VTU (Visvesvaraya Technological University).",True,1.0,False,False,False,5,False,True,6.713,2789.1,2189.5,382.5,1190.8,17.8,2187,3549.0,99.0,87.0,2.4,14.44
+B34,Document Isolation,northstar_mobility.pdf,What is the role of Aditi Menon in Northstar Mobility?,Chief Technology Officer (CTO),"According to the provided document excerpts, Aditi Menon serves as the Chief Technology Officer (CTO) at Northstar Mobility.",True,1.0,False,False,False,5,False,True,5.226,2876.9,1015.2,401.8,744.2,23.0,2449,3530.0,94.0,87.0,15.4,14.45
+B35,Document Isolation,northstar_mobility.pdf,Which tiers support SAML 2.0 single sign-on and when is administrator MFA mandatory in Northstar Mobility?,Business Plus and Critical tiers support SAML 2.0; Admin MFA mandatory from 1 October 2026,"According to the provided excerpts, SAML 2.0 single sign-on is available on the Business Plus and Critical tiers.
+
+Additionally, administrator multi-factor authentication (MFA) is mandatory for all customer administrator accounts starting from 1 October 2026.",True,1.0,False,False,False,5,False,True,6.605,2022.0,3066.9,401.0,885.9,14.8,2176,3590.0,14.0,87.0,25.0,14.71
+B36,Negative Boundary,northstar_mobility.pdf,What is the individual sorting hub count located specifically in Bengaluru according to Northstar Mobility?,Genuinely absent / not stated (document explicitly notes hub count by city is omitted),The provided document excerpts do not specify the exact hub count in Bengaluru.,True,1.0,False,True,True,5,False,True,4.789,1499.8,1462.4,370.6,1256.2,11.6,1976,3624.0,71.0,87.0,70.0,14.52
+B37,Negative Boundary,northstar_mobility.pdf,What are the exact customer contract subscription prices per vehicle in Northstar Mobility?,Genuinely absent / not stated (document explicitly states customer contract prices are omitted),The provided document excerpts do not contain sufficient information to answer this question.,True,1.0,False,True,True,5,False,True,5.204,2742.8,1127.2,311.8,837.5,15.0,2245,3540.0,49.0,88.0,8.3,14.43
+B38,Negative Boundary,northstar_mobility.pdf,What is the planned launch date for Northstar Mobility's operations in 2027?,Genuinely absent / not stated (document explicitly notes 2027 launch date is omitted),The provided document excerpts do not contain information about the planned launch date for Northstar Mobility's operations in 2027.,True,1.0,False,True,True,5,False,True,7.404,2881.9,2723.5,432.1,1152.3,9.1,1988,3688.0,15.0,87.0,48.7,14.73
+B39,Negative Boundary,Ambulance Dispatch.pdf,What deep neural network architecture is recommended for predicting hospital bed occupancy in London hospitals in Ambulance Dispatch Optimization?,Genuinely absent / not stated (paper does not cover London hospitals or bed occupancy),"Unfortunately, the provided document excerpts do not mention a specific deep neural network architecture for predicting hospital bed occupancy in London hospitals.",False,0.0,True,True,False,5,False,True,9.396,4469.2,1899.9,361.5,2351.1,15.1,2858,3581.0,0.0,87.0,45.7,14.24
+B40,Negative Boundary,pythonlearn.pdf,What are the clinical trial phase III results for Pfizer mRNA vaccines in pythonlearn?,"Genuinely absent / not stated (pythonlearn is a programming book, contains no vaccine trials)",The provided document excerpts do not contain information on clinical trial phase III results for Pfizer mRNA vaccines.,True,1.0,False,True,True,5,True,True,5.996,2003.2,1256.3,478.8,2052.3,18.6,1897,3550.0,58.0,87.0,90.6,14.43
+B41,Negative Boundary,RM Module-2.pdf,What recipe and oven temperature for French baguettes is described in RM Module-2?,"Genuinely absent / not stated (RM Module-2 is a research methodology book, no baking recipes)",The provided document(s) do not contain sufficient information to answer this question.,True,1.0,False,True,True,0,True,True,3.652,353.40000000000003,3298.6,883.5,0.0,4.7,0,3631.0,0.0,87.0,86.5,14.91
+B42,Negative Boundary,RESUME__PRANIT.pdf,What is the quantum teleportation fidelity rate mentioned in Pranit Kumar's resume?,"Genuinely absent / not stated (resume contains software engineering skills, no quantum physics)",The provided document excerpts do not mention the quantum teleportation fidelity rate.,False,0.0,True,True,False,3,False,True,3.857,1684.5,1368.7,359.3,241.8,11.4,1630,3538.0,42.0,88.0,8.5,14.65

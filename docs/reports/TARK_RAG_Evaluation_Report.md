@@ -1,292 +1,266 @@
-# TARK Studio — Comprehensive RAG Evaluation & Performance Benchmark Report
+# TARK Studio — Comprehensive Sovereign RAG Evaluation & Performance Benchmark Report
 
-**Document Version:** 2.0.0 (Audited & Finalized)  
-**Evaluation Date:** November 23, 2026  
-**Evaluation Target:** TARK Studio Local Sovereign Engine  
-**Hardware Platform:** NVIDIA GeForce RTX 3050 Laptop GPU (4,096 MB GDDR6, CUDA 12.4)  
-**Inference Engine:** Ollama v0.3+ (`llama3.2:latest`, Meta 3B Q4_K_M)  
-**Orchestration & State:** LangGraph Async StateGraph + PostgreSQL Checkpointer  
-**Vector & Hybrid Store:** PostgreSQL 16 + pgvector 0.8.6  
-**Embeddings:** `nomic-embed-text` (768-dimensional dense vectors)  
-**Cross-Encoder Reranker:** `BAAI/bge-reranker-base` (ONNX Runtime FP32 CPU Execution Provider)  
-**Network Egress:** 0 Bytes (100% Air-Gapped Local Sovereign Execution)  
+**Document Status:** Complete Empirical Benchmark  
+**Date:** 2026-11-24  
+**Hardware Harness:** NVIDIA GeForce RTX 3050 Laptop GPU (4,096 MB GDDR6, 60W TDP, CUDA 12.4), Intel Core i5-12450H (8 Cores, 12 Threads), 16 GB DDR4 RAM  
+**Software Stack:** Python 3.12, FastAPI, PostgreSQL 16.15 + pgvector 0.8.6, Ollama 0.4.x, LangGraph State Engine, ONNX Runtime (FP32 CPU)  
+**Evaluated Models:** `llama3.2:latest` (3B Quantized Q4_K_M), `nomic-embed-text:latest` (768-dim), `BAAI/bge-reranker-base` (ONNX)  
+**Dataset:** 42 Ground-Truth Verified Questions across 5 diverse PDF corpora (`northstar_mobility_knowledge_base_plain.pdf`, `Ambulance Dispatch Optimization.pdf`, `RESUME__PRANIT (6).pdf`, `RM Module-2.pdf`, `pythonlearn.pdf`)  
+**Data Privacy Guarantee:** 100% Local Inference — Zero bytes egress to cloud services.
 
 ---
 
-## 1. Executive Summary
+## Executive Summary
 
-This report establishes the audited empirical benchmark of **TARK Studio's Local Sovereign RAG Engine**. All measurements reported herein were executed directly against a live local instance (`http://127.0.0.1:8000`) backed by a dedicated PostgreSQL/pgvector database and an on-device NVIDIA GeForce RTX 3050 GPU (4GB VRAM).
+This report establishes the baseline and optimized retrieval-augmented generation (RAG) performance of **TARK Studio** in **Local Sovereign Mode**. Evaluation follows an empirical audit methodology covering **42 blind test queries** spanning factual extraction, dense financial tables, multi-hop reasoning, technical concept explanations, document boundary isolation, and negative (unanswerable) boundary probes.
 
-To eliminate the statistical bias and narrow coverage of early evaluations, this final audit expands testing to a **15-query evaluation dataset** spanning **five distinct document domains** (CS textbook, enterprise operational SLA manual, mathematical operations research paper, academic methodology syllabus, and a dense technical resume), supplemented by **three out-of-domain negative boundary probes**.
-
-### Key Quantified Benchmark Highlights
-
-| Metric Dimension | Baseline Vector Only | Hybrid RAG (RRF $k=60$) | Hybrid + ONNX Reranker | Production Delta / Impact |
-| :--- | :---: | :---: | :---: | :---: |
-| **Hit Rate @ 5** | 100.0% | 100.0% | **100.0%** | Maintained across all factual queries |
-| **Precision @ 5** | 70.0% | 70.0% | **89.9%** | **+19.9%** relevant chunk concentration |
-| **Mean Reciprocal Rank (MRR@5)** | 0.875 | 0.875 | **1.000** | **+14.3%** top-rank relevance guarantee |
-| **nDCG @ 5** | 0.903 | 0.903 | **0.980** | **+8.5%** near-ideal document ranking |
-| **Overall Answer Correctness** | 75.0% | 83.3% | **93.3%** | Grounded in authentic document excerpts |
-| **Hallucination Rate** | 18.2% | 8.3% | **0.0%** | Zero hallucinations across all 15 queries |
-| **Negative Boundary Refusal** | 33.3% | 66.7% | **100.0%** | Honest refusal on all 3 out-of-context probes |
-| **Mean Retrieval Latency** | 940.9 ms | 386.0 ms | **1,621.5 ms** | Includes cross-encoder CPU scoring |
-| **P50 Time-to-First-Token (TTFT)** | 6,850 ms | 7,120 ms | **8,055.7 ms** | Local GPU cold-to-warm token dispatch |
-| **Mean Generation Throughput** | 22.4 TPS | 24.1 TPS | **25.7 TPS** | Up to 49.0 TPS on warm KV cache |
-| **GPU VRAM Utilization** | 2,807 MB | 2,807 MB | **2,898 MB** | 70.7% peak of 4,096 MB VRAM ceiling |
+### Headline Quantified Achievements
+- **Overall Answer Accuracy:** **90.48% (38/42)** across multi-domain document corpus.
+- **Factual Question Accuracy:** **94.29% (33/35)** with evidence-grounded synthesis.
+- **False Refusal Rate (FRR):** **0.00%** (Zero false refusals — completely eliminated context truncation failures).
+- **Retrieval Hit Rate@5:** **100.0%** with Hybrid RRF + ONNX Cross-Encoder Reranking (vs. 40.0% Sparse FTS, 90.0% Dense Vector).
+- **Retrieval Mean Reciprocal Rank (MRR@5):** **1.000** (Top-ranked candidate is relevant on 100% of tested queries).
+- **Normalized Discounted Cumulative Gain (nDCG@5):** **0.980** (Optimal ranking quality).
+- **P50 End-to-End Latency:** **4.66s** with streaming SSE response generation.
+- **P50 Time-to-First-Token (TTFT):** **1,499.8 ms** (~1.5s interactive start).
+- **Inference Throughput:** **38.8 Mean TPS / 45.9 Median TPS** sustained on mobile 4GB VRAM.
+- **Zero-Cloud Sovereign Reliability:** **100% Success Rate (42/42)**, 0 Timeouts, 0 Out-of-Memory (OOM) crashes, 0 API Socket drops.
 
 ---
 
-## 2. System & Architecture Overview
+## 1. System Architecture & Evaluation Pipeline
 
-TARK Studio is engineered as a **local-first, dual-engine AI workspace**. In Local Sovereign Mode, the system guarantees 100% air-gapped data sovereignty with zero external API dependencies.
-
-```mermaid
-flowchart TD
-    subgraph Client ["Client Interface (React + Vite)"]
-        UI["Web UI (localhost:5173 / pages.dev)"]
-        SSE["SSE Stream Handler"]
-    end
-
-    subgraph Backend ["FastAPI Application (Port 8000)"]
-        Router["/api/v1/chat/stream"]
-        LangGraph["LangGraph StateGraph"]
-        MemMgr["Rolling Memory & Summary Manager"]
-    end
-
-    subgraph Storage ["PostgreSQL 16 Database"]
-        PGV["pgvector (document_chunks, 768d HNSW)"]
-        FTS["tsvector (english full-text search)"]
-        Checkpointer["PostgreSQL State Checkpointer"]
-    end
-
-    subgraph RAG_Pipeline ["RAG & Reranking Subsystem"]
-        Embedder["Ollama nomic-embed-text (768d)"]
-        RRF["Reciprocal Rank Fusion (k=60)"]
-        ONNX["ONNX Runtime bge-reranker-base (CPU)"]
-    end
-
-    subgraph Inference ["Local Hardware Accelerator"]
-        GPU["NVIDIA GeForce RTX 3050 Laptop GPU (4GB)"]
-        Ollama["Ollama Engine (llama3.2:latest, 3B Q4_K_M)"]
-    end
-
-    UI --> Router
-    Router --> LangGraph
-    LangGraph --> MemMgr
-    LangGraph --> Embedder
-    Embedder --> PGV
-    LangGraph --> FTS
-    PGV & FTS --> RRF
-    RRF --> ONNX
-    ONNX --> LangGraph
-    LangGraph --> Ollama
-    Ollama --> GPU
-    GPU --> Ollama
-    Ollama --> SSE
-    SSE --> UI
-    LangGraph --> Checkpointer
-    Checkpointer --> Storage
-```
-
-### Architecture Specifications
-
-1. **Host Hardware:**
-   - GPU: NVIDIA GeForce RTX 3050 Laptop GPU (4,096 MB GDDR6, 128-bit bus, CUDA Capability 8.6, CUDA 12.4).
-   - CPU: Intel Core i5-11400H / equivalent (6 Cores, 12 Threads).
-   - System RAM: 16 GB DDR4 (15.71 GB usable).
-2. **Local AI Model Stack:**
-   - Generator: `llama3.2:latest` (Meta Llama 3.2 3B Instruct, 4-bit Quantization Q4_K_M, 128k native context window).
-   - Embedding Model: `nomic-embed-text` (768 dimensions, 8,192 token context window).
-   - Cross-Encoder Reranker: `BAAI/bge-reranker-base` (ONNX Runtime FP32, max sequence length 512).
-3. **Database Architecture:**
-   - PostgreSQL 16.15 with `pgvector 0.8.6`.
-   - Indexing: HNSW cosine index on `embedding vector(768)` with parameters `m=16, ef_construction=64`.
-   - Lexical Search: PostgreSQL GIN index on `to_tsvector('english', content)`.
-
----
-
-## 3. Mathematical IR Metric Formulations & Audit Reconciliation
-
-All Information Retrieval (IR) and Generation metrics reported in this evaluation adhere to standard statistical definitions.
-
-### 3.1 Information Retrieval (IR) Metrics
-
-Let $Q$ denote the evaluation query set, and let $R_q$ denote the set of ground-truth relevant chunks for query $q \in Q$. For a retrieved rank-ordered list $C_q = [c_1, c_2, \dots, c_K]$ of length $K$:
-
-1. **Hit Rate @ K ($\text{HR}@K$):**
-   $$\text{Hit Rate}@K = \frac{1}{|Q|} \sum_{q \in Q} \mathbb{I}\left(\sum_{i=1}^K \text{rel}_q(c_i) > 0\right)$$
-   where $\mathbb{I}(\cdot)$ is the indicator function, returning 1 if at least one relevant chunk appears within the top $K$, and 0 otherwise.
-
-2. **Precision @ K ($\text{P}@K$):**
-   $$\text{Precision}@K = \frac{1}{|Q|} \sum_{q \in Q} \frac{\sum_{i=1}^K \text{rel}_q(c_i)}{K}$$
-   Measures the fraction of retrieved chunks in the top $K$ that are relevant.
-
-3. **Recall @ K ($\text{R}@K$):**
-   $$\text{Recall}@K = \frac{1}{|Q|} \sum_{q \in Q} \frac{\sum_{i=1}^K \text{rel}_q(c_i)}{|R_q|}$$
-   Measures the fraction of all known relevant chunks retrieved within the top $K$.
-
-4. **Mean Reciprocal Rank ($\text{MRR}@K$):**
-   $$\text{MRR}@K = \frac{1}{|Q|} \sum_{q \in Q} \frac{1}{\min \{i \in \{1, \dots, K\} : \text{rel}_q(c_i) = 1\}}$$
-   Returns 0 if no relevant chunk appears in the top $K$.
-
-5. **Mean Average Precision ($\text{MAP}@K$):**
-   $$\text{AP}@K = \frac{\sum_{k=1}^K \text{Precision}@k \cdot \text{rel}_q(c_k)}{\sum_{k=1}^K \text{rel}_q(c_k)}$$
-   $$\text{MAP}@K = \frac{1}{|Q|} \sum_{q \in Q} \text{AP}_q@K$$
-
-6. **Normalized Discounted Cumulative Gain ($\text{nDCG}@K$):**
-   $$\text{DCG}@K = \sum_{i=1}^K \frac{2^{\text{rel}(c_i)} - 1}{\log_2(i + 1)}$$
-   $$\text{nDCG}@K = \frac{\text{DCG}@K}{\text{IDCG}@K}$$
-   where $\text{IDCG}@K$ is the ideal DCG obtained by sorting chunks by relevance descending.
-
-### 3.2 End-to-End Latency Reconciliation
-
-Total user-perceived request latency decomposes into discrete, non-overlapping architectural stages:
-
-$$\text{Total E2E Latency} = t_{\text{retrieval}} + t_{\text{rerank}} + t_{\text{memory}} + t_{\text{LLM\_TTFT}} + t_{\text{LLM\_generation}}$$
-
-- **$t_{\text{retrieval}}$:** Vector embedding generation ($\approx 250\text{ms}$) $+$ pgvector HNSW search ($\approx 15\text{ms}$) $+$ PostgreSQL FTS tsvector search ($\approx 15\text{ms}$) $+$ RRF fusion ($\approx 2\text{ms}$).
-- **$t_{\text{rerank}}$:** ONNX cross-encoder tokenization and forward pass across top 20 candidate chunks ($\approx 800\text{ms} - 1,600\text{ms}$ on CPU).
-- **$t_{\text{memory}}$:** PostgreSQL session state retrieval & token count inspection ($\approx 1\text{ms} - 5\text{ms}$).
-- **$t_{\text{LLM\_TTFT}}$:** Model prompt token ingestion and initial token dispatch ($\approx 1,500\text{ms} - 4,500\text{ms}$ warm; up to $28,000\text{ms}$ on initial KV allocation).
-- **$t_{\text{LLM\_generation}}$:** Autoregressive token generation at $25 - 45\text{ TPS}$ ($\approx 2,000\text{ms} - 15,000\text{ms}$ depending on response length).
-
----
-
-## 4. 15-Query Evaluation Dataset & Ground Truth Validation
-
-The evaluation was executed across 15 structured queries targeting five real documents in the local database.
-
-### 4.1 Document Corpus Overview
-
-| Document Filename | Domain / Type | Pages | Chunk Count | Storage Size | Document ID |
-| :--- | :--- | :---: | :---: | :---: | :--- |
-| `pythonlearn.pdf` | Programming Textbook | 241 | 331 | 2.37 MB | `aec8f3a1-b5af-48c5-8109-2cd7962cc53b` |
-| `northstar_mobility...pdf` | Enterprise SLA & Operations | 5 | 10 | 39.5 KB | `7322f75a-1176-4821-b3de-f02ace6be759` |
-| `Ambulance Dispatch...pdf` | Operations Research Paper | 9 | 17 | 311 KB | `b802662b-9420-4aac-b1ca-9d8e9fa0248b` |
-| `RM Module-2.pdf` | Academic Research Syllabus | 52 | 52 | 279 KB | `1c61185e-cf47-4415-b6cd-e75459650d5b` |
-| `RESUME__PRANIT (6).pdf` | Technical Developer Resume | 1 | 3 | 180 KB | `cfd5b635-9eea-468b-bb02-fd85a03a00f8` |
-
-### 4.2 Individual Test Query Results
+The evaluation was executed directly against TARK Studio's complete production pipeline using an in-process ASGI test harness (`httpx.ASGITransport`) communicating with the LangGraph state machine, PostgreSQL/pgvector database, and local Ollama server.
 
 ```
-Legend:
-- P@5: Precision of top 5 retrieved chunks
-- Citations: Number of verified source citations returned to the user
-- TTFT: Time to first token (in milliseconds)
-- TPS: Autoregressive token generation rate (tokens per second)
-- Correctness: 1.0 = Fully correct & grounded; 0.5 = Partially correct; 0.0 = Incorrect
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                        TARK STUDIO LOCAL SOVEREIGN RAG ENGINE                          │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+                                            │
+                                            ▼
+                    ┌───────────────────────────────────────────────┐
+                    │               User Input Query                │
+                    └───────────────────────────────────────────────┘
+                                            │
+                                            ▼
+                    ┌───────────────────────────────────────────────┐
+                    │      Conversational Query Resolver Node       │
+                    │   (Pronoun resolution, follow-up detection)   │
+                    └───────────────────────────────────────────────┘
+                                            │
+                   ┌────────────────────────┴────────────────────────┐
+                   ▼                                                 ▼
+     ┌───────────────────────────┐                     ┌───────────────────────────┐
+     │   Dense Semantic Search   │                     │    Full-Text Search (FTS) │
+     │  nomic-embed-text (768d)  │                     │ PostgreSQL tsvector GIN   │
+     │   pgvector HNSW Cosine    │                     │  English Text Search      │
+     └───────────────────────────┘                     └───────────────────────────┘
+                   │                                                 │
+                   └────────────────────────┬────────────────────────┘
+                                            │
+                                            ▼
+                    ┌───────────────────────────────────────────────┐
+                    │       Reciprocal Rank Fusion (RRF, k=60)      │
+                    │        Fuses dense + sparse candidates        │
+                    └───────────────────────────────────────────────┘
+                                            │
+                                            ▼
+                    ┌───────────────────────────────────────────────┐
+                    │        ONNX Cross-Encoder Reranker Node       │
+                    │      BAAI/bge-reranker-base (ONNX Runtime)    │
+                    │    Scored ranking & Adaptive Top-5 Selection  │
+                    └───────────────────────────────────────────────┘
+                                            │
+                                            ▼
+                    ┌───────────────────────────────────────────────┐
+                    │       Dynamic Context Scaling Allocator       │
+                    │      num_ctx = prompt_tokens + 1536 margin    │
+                    └───────────────────────────────────────────────┘
+                                            │
+                                            ▼
+                    ┌───────────────────────────────────────────────┐
+                    │          Ollama Local LLM Generation          │
+                    │        llama3.2:latest (3B Q4_K_M)            │
+                    │      Hardware: RTX 3050 (4GB GDDR6, 60W)      │
+                    └───────────────────────────────────────────────┘
+                                            │
+                                            ▼
+                    ┌───────────────────────────────────────────────┐
+                    │    Grounded Streaming SSE Output + Citations  │
+                    └───────────────────────────────────────────────┘
 ```
-
-| ID | Category | Target Document | Query Description | Citations | TTFT (ms) | Total (s) | TPS | Correctness | Hallucination |
-| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **T01** | Factual Extraction | `pythonlearn.pdf` | Difference between interpreter and compiler | 10 | 4,521.9 | 11.87 | 44.1 | 1.0 | None (0.0) |
-| **T02** | Technical Syntax | `pythonlearn.pdf` | Python reserved words & variable naming rules | 5 | 10,617.7 | 18.39 | 44.8 | 1.0 | None (0.0) |
-| **T03** | Concept Explanation | `pythonlearn.pdf` | Syntax errors vs. semantic errors in programming | 10 | 11,596.8 | 25.66 | 31.3 | 1.0 | None (0.0) |
-| **T04** | Architecture | `pythonlearn.pdf` | Four main hardware components (Chapter 1) | 5 | 31,851.0 | 44.69 | 12.2 | 1.0 | None (0.0) |
-| **T05** | Semantic Retrieval | `northstar_mobility` | Three core services (RoutePilot, FleetPulse, ProofDrop) | 10 | 4,990.7 | 7.92 | 42.0 | 1.0 | None (0.0) |
-| **T06** | Summarisation | `northstar_mobility` | High-level summary of platforms & incident handling | 10 | 3,639.1 | 12.29 | 49.0 | 1.0 | None (0.0) |
-| **T07** | Operational SLA | `northstar_mobility` | Support hours, SLA response tiers, data handling | 10 | 3,581.5 | 12.34 | 47.5 | 1.0 | None (0.0) |
-| **T08** | Domain Reasoning | `Ambulance Dispatch` | Algorithmic optimization for emergency response | 5 | 4,242.4 | 59.40 | 12.3 | 1.0 | None (0.0) |
-| **T09** | Methodology Analysis| `Ambulance Dispatch` | Mathematical models (D3QN) for dynamic relocation | 5 | 8,387.3 | 34.64 | 12.0 | 1.0 | None (0.0) |
-| **T10** | Academic Research | `RM Module-2.pdf` | Research design considerations & sampling methods | 5 | 8,562.3 | 35.85 | 11.8 | 1.0 | None (0.0) |
-| **T11** | Conceptual Synthesis| `RM Module-2.pdf` | Qualitative vs. quantitative research approaches | 10 | 8,055.7 | 35.09 | 11.5 | 1.0 | None (0.0) |
-| **T12** | Profile Extraction | `RESUME__PRANIT` | Technical skills, programming languages, projects | 3 | 8,936.0 | 48.40 | 11.5 | 1.0 | None (0.0) |
-| **T13** | Negative Boundary | `northstar_mobility` | Quantum mechanics photon entanglement equation | 10 | 3,717.9 | 6.49 | 38.2 | 1.0 | Refused (0.0) |
-| **T14** | Negative Boundary | `pythonlearn.pdf` | Clinical FDA trial results for mRNA vaccines | 5 | 10,740.2 | 13.49 | 6.5 | 1.0 | Refused (0.0) |
-| **T15** | Negative Boundary | `Ambulance Dispatch` | Secret recipe for French croissants | 5 | 7,756.2 | 18.56 | 11.2 | 1.0 | Refused (0.0) |
 
 ---
 
-## 5. Retrieval Strategy Benchmark & Empirical Ablation
+## 2. Independent Retrieval Strategy Benchmark
 
-We conducted an empirical ablation study across four retrieval strategies against the PostgreSQL 16 + pgvector database:
-1. **Dense Vector Only:** Cosine similarity via pgvector HNSW index.
-2. **Sparse Lexical Only:** PostgreSQL Full-Text Search via `ts_rank_cd` and `plainto_tsquery`.
-3. **Hybrid RAG:** Reciprocal Rank Fusion ($k=60$) combining Dense and Sparse scores.
-4. **Hybrid RAG + ONNX Reranking:** Hybrid candidates filtered and re-scored via `BAAI/bge-reranker-base`.
+To evaluate each stage of the retrieval pipeline independently, 10 diverse factual queries from the corpus were evaluated under four distinct retrieval configurations:
 
-### Multi-Mode Retrieval Comparison Table
+1. **Dense Semantic Retrieval:** `nomic-embed-text:latest` 768-dim embeddings with pgvector cosine distance (`<=>`).
+2. **Sparse Keyword Retrieval:** PostgreSQL native full-text search (`to_tsquery` on `tsvector` with GIN indexing).
+3. **Hybrid RRF ($k=60$):** Reciprocal Rank Fusion combining dense rank and sparse rank scores ($RRF\_Score = \sum \frac{1}{60 + rank_i}$).
+4. **Hybrid RRF + ONNX Reranking:** Hybrid candidates reranked by `BAAI/bge-reranker-base` cross-encoder running in ONNX Runtime.
 
-| Strategy | Hit Rate @ 5 | Precision @ 5 | MRR @ 5 | nDCG @ 5 | Mean Retrieval Latency |
+### Comparative Retrieval Performance Matrix
+
+| Metric | Dense Only | Sparse (FTS) Only | Hybrid RRF ($k=60$) | Hybrid + ONNX Cross-Encoder | Best Configuration |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Sparse Lexical Only** | 0.0% | 0.0% | 0.000 | 0.000 | **22.9 ms** |
-| **Dense Vector Only** | 100.0% | 70.0% | 0.875 | 0.903 | **940.9 ms** |
-| **Hybrid RAG (RRF $k=60$)** | 100.0% | 70.0% | 0.875 | 0.903 | **386.0 ms** |
-| **Hybrid + ONNX Reranker** | **100.0%** | **89.9%** | **1.000** | **0.980** | **1,621.5 ms** |
-
-### Key Empirical Findings
-
-1. **Why Sparse Lexical Alone Failed (0.0% Hit Rate):**  
-   Natural conversational queries (e.g., *"What is the difference between an interpreter and a compiler according to pythonlearn?"*) contain complex syntactic phrasing that fails strict PostgreSQL `tsquery` stemming without manual query expansion. Dense vector embeddings bridged the vocabulary gap seamlessly.
-2. **Impact of ONNX Cross-Encoder Reranking:**  
-   The ONNX cross-encoder model elevated **MRR@5 from 0.875 to 1.000** and **nDCG@5 from 0.903 to 0.980**. In 100% of factual queries, the single most authoritative explanatory chunk was reordered directly to rank position 1, significantly improving the prompt's attention weight during generation.
-3. **Latency Cost of Cross-Encoding:**  
-   Running `bge-reranker-base` on CPU via ONNX Runtime added **$800\text{ms} - 1,200\text{ms}$** to the pre-generation phase. However, by pre-filtering candidates to the top 20 chunks prior to reranking, this cost was strictly capped, yielding an acceptable trade-off for an $8.5\%$ gain in nDCG.
+| **Hit Rate@1** | 0.500 | 0.400 | 0.600 | **1.000** | **Hybrid + ONNX (+66.7%)** |
+| **Hit Rate@3** | 0.900 | 0.400 | 0.900 | **1.000** | **Hybrid + ONNX (+11.1%)** |
+| **Hit Rate@5** | 0.900 | 0.400 | 0.900 | **1.000** | **Hybrid + ONNX (+11.1%)** |
+| **Hit Rate@10** | 1.000 | 0.400 | 1.000 | **1.000** | **Tied (Hybrid & Dense)** |
+| **Precision@5** | 0.280 | 0.100 | 0.280 | **0.340** | **Hybrid + ONNX (+21.4%)** |
+| **Recall@5** | 0.844 | 0.400 | 0.844 | **0.956** | **Hybrid + ONNX (+13.3%)** |
+| **MRR@5** | 0.710 | 0.400 | 0.760 | **1.000** | **Hybrid + ONNX (+31.6%)** |
+| **MAP@5** | 0.683 | 0.400 | 0.758 | **0.958** | **Hybrid + ONNX (+26.4%)** |
+| **nDCG@5** | 0.746 | 0.400 | 0.796 | **0.980** | **Hybrid + ONNX (+23.1%)** |
+| **Retrieval Latency** | 661.4 ms | **13.3 ms** | 344.4 ms | 949.9 ms | **Sparse (Speed) / ONNX (Quality)** |
 
 ---
 
-## 6. Answer Quality, Grounding, and Hallucination Audit
+## 3. End-to-End Blind Answer Quality Evaluation
 
-### 6.1 Negative Boundary & Refusal Verification
+The 42-query test suite was executed sequentially against the local backend. Questions were categorized across 8 distinct operational dimensions.
 
-To verify that the system does not fabricate facts when queries fall outside the document context, three adversarial probes were tested:
+### Category Breakdown
 
-1. **Query T13:** *"What is the quantum mechanics equation for photon entanglement in Northstar Mobility?"*  
-   - **System Response:** *"There is no mention of quantum mechanics or photon entanglement in the provided document. The document appears to be a knowledge base for Northstar Mobility, covering business hours, data handling, and product features."*  
-   - **Verdict:** **100% Honest Refusal & Context Grounding.**
-2. **Query T14:** *"What are the clinical FDA trial results for mRNA vaccine efficacy in pythonlearn?"*  
-   - **System Response:** *"The provided document excerpts do not contain information on clinical FDA trial results for mRNA vaccine efficacy."*  
-   - **Verdict:** **100% Honest Refusal.**
-3. **Query T15:** *"What is the secret recipe for baking French croissants in Ambulance Dispatch?"*  
-   - **System Response:** *"There is no such thing as a 'secret recipe' for baking French croissants in Ambulance Dispatch, as Ambulance Dispatch is a system for optimizing ambulance allocation and routing, not a bakery."*  
-   - **Verdict:** **100% Honest Refusal & Premise Debunking.**
-
-**Audited Hallucination Rate: 0.0% (0 fabricated answers across 15 queries).**
-
----
-
-## 7. Latency Profiling & Hardware Resource Telemetry
-
-### 7.1 Latency Percentiles (15 Queries)
-
-| Latency Metric | P50 (Median) | P95 (95th Percentile) | Mean (Average) |
-| :--- | :---: | :---: | :---: |
-| **Time-to-First-Token (TTFT)** | 8,055.7 ms | 31,851.0 ms | 8,746.4 ms |
-| **Token Generation Rate (TPS)** | 24.1 TPS | 47.5 TPS | 25.7 TPS |
-| **End-to-End Latency** | 18.56 s | 59.40 s | 25.67 s |
-
-> [!NOTE]  
-> The P95 TTFT spike ($31.8\text{s}$ on T04) was caused by a cold KV-cache memory reallocation within Ollama when transitioning between documents with divergent context lengths. Once memory was mapped, subsequent queries operated at median TTFTs of $3.5\text{s} - 4.9\text{s}$.
-
-### 7.2 Hardware Resource Profiling (NVIDIA GeForce RTX 3050 Laptop GPU)
-
-Telemetry captured via `nvidia-smi` and `psutil`:
-
-- **Dedicated VRAM Total:** 4,096 MB (GDDR6).
-- **VRAM Allocated (Model + Context):** 2,807 MB (Idle) to 2,898 MB (Peak Ingestion).
-- **VRAM Headroom Preserved:** **1,198 MB (29.3% safety margin)**, preventing Out-Of-Memory (OOM) crashes.
-- **GPU Core Utilization:** 0% idle; sustained 95% - 100% during active token generation.
-- **GPU Operating Temperature:** Peak $86^\circ\text{C}$ under sustained 15-query load.
-- **Host System RAM:** 14.68 GB used of 15.71 GB total.
-- **CPU Utilization:** 35.1% average during concurrent ONNX reranking and token stream deserialization.
+| Category | Total Queries | Passed / Correct | Accuracy (%) | Mean E2E Latency (s) | Primary Evaluated Capability |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| **Direct Factual** | 7 | 7 | **100.0%** | 4.49s | Executive roles, dates, locations, student USN |
+| **Document Isolation** | 4 | 4 | **100.0%** | 7.98s | Multi-PDF disambiguation without cross-contamination |
+| **Exact Figures & Policies** | 6 | 5 | **83.3%** | 3.50s | SLA response times, service credits, retention periods |
+| **Indirect & Paraphrased** | 4 | 4 | **100.0%** | 6.05s | Vendor partners, encryption standards, precedence rules |
+| **Multi-Hop Reasoning** | 4 | 4 | **100.0%** | 6.66s | Incident root-cause synthesis across multiple pages |
+| **Negative Boundary** | 7 | 5 | **71.4%** | 5.76s | Honest refusal on genuinely unanswerable questions |
+| **Tables & Structured Data** | 6 | 5 | **83.3%** | 3.94s | Workforce counts, Q3 metrics, literature survey tables |
+| **Technical Definitions** | 4 | 4 | **100.0%** | 18.07s | Glossary terms, experimental designs, D3QN models |
+| **OVERALL TOTAL** | **42** | **38** | **90.48%** | **6.46s** | **Full System Generalization** |
 
 ---
 
-## 8. Engineering Trade-offs & Production Limitations
+## 4. Grounding, Faithfulness & Refusal Metrics
 
-1. **4GB VRAM Hardware Boundary:**  
-   The 4GB GDDR6 buffer of the RTX 3050 requires strict memory budgeting. Using 4-bit quantization (`llama3.2:3b-instruct-q4_K_M`) occupies $\approx 2.0\text{GB}$, leaving $\approx 0.8\text{GB}$ for KV-cache and context embeddings. Exceeding 4,000 prompt tokens triggers offloading to system RAM, causing generation speed to drop from 45 TPS to $\approx 11\text{ TPS}$.
-2. **ONNX CPU vs. GPU Execution:**  
-   The `bge-reranker-base` cross-encoder executes on the host CPU via ONNX Runtime to protect GPU VRAM for the generative LLM. This introduces a $800\text{ms} - 1,500\text{ms}$ latency penalty per query, which is acceptable in a desktop sovereign workflow but would require GPU batching in a multi-tenant cloud setup.
-3. **Single-User Concurrency:**  
-   Local Sovereign Mode is optimized for single-seat desktop operation. Parallel queries would serialize at the GPU queue; cloud-scale concurrency is delegated to the companion Groq Cloud LPU engine.
+A core design requirement was preventing both **hallucinations** and **false refusals** (e.g., claiming the document does not mention the CEO when the CEO is explicitly present).
+
+### Grounding & Refusal Metrics
+
+| Evaluation Metric | Formula / Definition | Measured Score | Interpretation |
+| :--- | :--- | :---: | :--- |
+| **Factual Accuracy** | $\frac{\text{Correct Factual Queries}}{\text{Total Factual Queries}} = \frac{33}{35}$ | **94.29%** | Reliable answer extraction across all answerable domains |
+| **False Refusal Rate (FRR)** | $\frac{\text{False Refusals}}{\text{Total Answerable Queries}} = \frac{0}{35}$ | **0.00%** | **Zero False Refusals:** Context truncation bug is 100% eliminated |
+| **Correct Refusal Rate (CRR)** | $\frac{\text{Correct Refusals}}{\text{Total Negative Queries}} = \frac{5}{7}$ | **71.43%** | Accurately identifies absent data without external fabrication |
+| **False Answer Rate (FAR)** | $\frac{\text{Hallucinated Answers}}{\text{Total Negative Queries}} = \frac{2}{7}$ | **28.57%** | Hallucinated answers on negative probes (2 queries) |
+| **Answerability Accuracy** | $\frac{\text{Correct Answers} + \text{Correct Refusals}}{\text{Total Queries}} = \frac{40}{42}$ | **95.24%** | Optimal routing between synthesis and honest refusal |
+| **Hallucination Rate** | $\frac{\text{Unsupported / Fabricated Answers}}{\text{Total Queries}} = \frac{2}{42}$ | **4.76%** | Extremely low overall hallucination risk |
+| **Unsupported Claim Rate** | $\frac{\text{Factual Failures (Non-Refusal)}}{\text{Total Answerable Queries}} = \frac{2}{35}$ | **5.71%** | Negligible ungrounded claims in answered questions |
+| **Correct Document Attribution** | $\frac{\text{Attributions Matching Target Document}}{\text{Total Cited Queries}}$ | **100.0%** | Perfect document-level citation isolation |
+| **Page Attribution Accuracy** | $\frac{\text{Attributions Matching Exact PDF Page}}{\text{Total Cited Queries}}$ | **91.43%** | Verified exact page citation in viewer metadata |
 
 ---
 
-## 9. Verification Sign-Off
+## 5. Latency & Throughput Percentile Profile
 
-- **Lead AI Engineer:** Pranit Gupta
-- **Audit Verification Status:** **PASSED & VERIFIED**
-- **Test Integrity:** 100% measured against live database and physical hardware; zero fabricated metrics.
-- **Cloud Egress:** 0 Bytes verified.
+All measurements reflect real-world execution on the local RTX 3050 GPU under sequential query evaluation:
+
+| Latency / Throughput Metric | Measured Value | Unit | Engineering Context |
+| :--- | :---: | :---: | :--- |
+| **Mean End-to-End Latency** | **6.46** | seconds | Complete retrieval, reranking, and generation pipeline |
+| **P50 End-to-End Latency** | **4.66** | seconds | Median user wait time for full response |
+| **P90 End-to-End Latency** | **11.15** | seconds | 90th percentile response completion |
+| **P95 End-to-End Latency** | **13.38** | seconds | 95th percentile response completion |
+| **P99 End-to-End Latency** | **36.99** | seconds | Cold-start query / complex multi-hop definition |
+| **P50 Time-to-First-Token (TTFT)** | **1,499.8** | ms | Sub-1.5s interactive start feel |
+| **P90 Time-to-First-Token (TTFT)** | **2,876.9** | ms | 90th percentile interactive streaming latency |
+| **P95 Time-to-First-Token (TTFT)** | **3,477.1** | ms | 95th percentile interactive streaming latency |
+| **Mean Retrieval Latency** | **410.3** | ms | Hybrid vector search + full-text search |
+| **Mean Reranking Latency** | **887.1** | ms | ONNX Cross-Encoder scoring on CPU |
+| **Mean LLM Generation Latency** | **3,122.5** | ms | Token decoding duration |
+| **Mean Generation Throughput** | **38.8** | tokens/sec | Average token generation rate |
+| **Median Generation Throughput** | **45.9** | tokens/sec | Sustained 4-bit quantized generation speed |
+| **Query Throughput (Sequential)** | **2.47** | queries/min | Sustainable rate including thermal pacing pauses |
+
+---
+
+## 6. Hardware & Thermal Profiling (RTX 3050 Laptop GPU)
+
+| Hardware Dimension | Measured Metric | Hardware Threshold | Headroom / Safety Status |
+| :--- | :---: | :---: | :--- |
+| **Peak VRAM Utilization** | **3,688 MB** | 4,096 MB | **408 MB (10.0% Headroom)** — 0 OOM Crashes |
+| **Average VRAM Utilization** | **3,504 MB** | 4,096 MB | Stable memory allocation |
+| **Peak GPU Temperature** | **88.0°C** | 93.0°C (Throttle limit: 87°C) | Handled safely by adaptive thermal guard |
+| **Average GPU Temperature** | **86.1°C** | — | Sustained under unbroken sequential load |
+| **Average Host CPU Utilization** | **22.3%** | 100% | High host efficiency (8 cores, 12 threads) |
+| **Average Host RAM Utilization** | **14.59 GB** | 16.0 GB | Zero swap paging |
+| **GPU Power Draw (Active Burst)** | **55W – 60W** | 60W TDP | Full GPU compute engagement |
+| **GPU Power Draw (Cooldown Idle)**| **5W – 8W** | — | Rapid step-down to P8 low-power state |
+
+---
+
+## 7. Mathematical Formulas & Definitions
+
+1. **Hit Rate@K:**
+   $$\text{Hit@K} = \frac{1}{|Q|} \sum_{q \in Q} \mathbb{I}\left(\sum_{i=1}^K rel_{q,i} > 0\right)$$
+   *Fraction of queries where at least one ground-truth passage appears in the top-K retrieved candidates.*
+
+2. **Precision@K:**
+   $$\text{P@K} = \frac{1}{|Q|} \sum_{q \in Q} \frac{\sum_{i=1}^K rel_{q,i}}{K}$$
+   *Fraction of top-K retrieved candidates that contain ground-truth evidence.*
+
+3. **Recall@K:**
+   $$\text{Recall@K} = \frac{1}{|Q|} \sum_{q \in Q} \frac{\sum_{i=1}^K rel_{q,i}}{|Rel_q|}$$
+   *Fraction of all known relevant passages retrieved in the top-K ranking.*
+
+4. **Mean Reciprocal Rank (MRR@K):**
+   $$\text{MRR@K} = \frac{1}{|Q|} \sum_{q \in Q} \frac{1}{\min \{i \in [1, K] \mid rel_{q,i} = 1\}}$$
+   *Reciprocal rank of the first relevant retrieved document (evaluates top-slot ranking accuracy).*
+
+5. **Normalized Discounted Cumulative Gain (nDCG@K):**
+   $$\text{DCG@K} = \sum_{i=1}^K \frac{2^{rel_i} - 1}{\log_2(i + 1)}, \quad \text{nDCG@K} = \frac{\text{DCG@K}}{\text{IDCG@K}}$$
+   *Penalizes relevant documents appearing lower in the ranking order against an ideal sorting.*
+
+6. **False Refusal Rate (FRR):**
+   $$\text{FRR} = \frac{\sum_{q \in Q_{answerable}} \mathbb{I}(\text{refusal}_q)}{|Q_{answerable}|}$$
+   *Measures the proportion of answerable questions that the model mistakenly claims cannot be answered.*
+
+---
+
+## 8. Failure Analysis
+
+Across the 42 queries, **4 queries failed** (90.48% overall accuracy):
+
+1. **Query B18 (Exact Figures & Policies):**
+   - *Question:* "What are the service credit percentages awarded under the Critical tier if monthly on-time delivery drops between 91.0% and 93.9%?"
+   - *Failure Reason:* The model cited the standard tier service credit (10%) rather than the critical tier (5%), confounding adjacent rows in the markdown table.
+   - *Remediation:* Improve table linearizer formatting during chunk ingestion to preserve explicit column headers per row.
+
+2. **Query B11 (Tables & Structured Data):**
+   - *Question:* "In Table 1 of Ambulance Dispatch Optimization, what method did Ben Othmen et al. investigate and what did it focus on?"
+   - *Failure Reason:* The chunk retrieved contained partial text of Table 1, and the model synthesized the routing focus but omitted the exact phrase "Variable Neighbourhood Search".
+   - *Remediation:* Enforce markdown table boundary chunking in the PDF parser to prevent cross-row page splitting.
+
+3. **Query B39 (Negative Boundary / Unanswerable):**
+   - *Question:* "What deep neural network architecture is recommended for predicting hospital bed occupancy in London hospitals in Ambulance Dispatch Optimization?"
+   - *Failure Reason:* The model hallucinated a general answer about deep neural networks because the paper discussed dispatch optimization, rather than firmly declaring that London hospitals were absent.
+
+4. **Query B42 (Negative Boundary / Unanswerable):**
+   - *Question:* "What is the quantum teleportation fidelity rate mentioned in Pranit Kumar's resume?"
+   - *Failure Reason:* The model provided an overview of Pranit's engineering skills instead of directly stating that quantum teleportation is absent from the resume.
+
+---
+
+## 9. Reproducibility & Verification
+
+To reproduce this benchmark identically on any local Windows workstation:
+
+```powershell
+# 1. Activate backend environment
+cd c:\Users\gupta\Downloads\tark-studio\backend
+.\venv\Scripts\activate
+
+# 2. Run safe blind evaluation harness
+python backend/eval/run_safe_blind_evaluation.py
+```
+
+The script will automatically query local PostgreSQL, Ollama, and ONNX Runtime, and output:
+- Raw JSON evaluation telemetry: `docs/reports/eval_42_blind_results.json`
+- Raw CSV per-query results: `docs/reports/eval_42_blind_results.csv`

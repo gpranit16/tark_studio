@@ -60,6 +60,8 @@ backend/models_cache/
 *.jpeg
 !frontend/public/*.jpg
 !frontend/public/*.png
+!docs/assets/*.png
+!docs/assets/*.jpg
 backend/eval/*_results.json
 backend/eval/results_baseline_*.json
 backend/eval/results_onnx_*.json
