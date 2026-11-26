@@ -11,7 +11,6 @@
     <img src="https://img.shields.io/badge/Live_Workspace-tark--studio.pages.dev-E59A64?style=for-the-badge&logo=cloudflarepages&logoColor=10130F&labelColor=171C17" alt="Live Workspace" />
   </a>
   <img src="https://img.shields.io/badge/Blind_Eval-94.3%25_Factual_|_0.0%25_FRR-A5B49A?style=for-the-badge&logo=target&logoColor=10130F&labelColor=171C17" alt="Blind Eval Accuracy" />
-  <img src="https://img.shields.io/github/stars/gpranit16/tark_studio?style=for-the-badge&logo=github&color=F1EEE6&labelColor=171C17" alt="GitHub Stars" />
   <img src="https://img.shields.io/github/last-commit/gpranit16/tark_studio?style=for-the-badge&logo=git&color=A5B49A&labelColor=171C17" alt="Last Commit" />
   <img src="https://img.shields.io/badge/Verified_Tests-44_Core_+_7_UI-E59A64?style=for-the-badge&logo=pytest&logoColor=10130F&labelColor=171C17" alt="Verified Tests" />
 </p>
